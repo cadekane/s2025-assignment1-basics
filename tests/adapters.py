@@ -574,79 +574,83 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    # Initialize vocabulary
+    # Initialize vocabulary with single bytes and their IDs
     vocab: Dict[int, bytes] = {
         x: bytes([x]) for x in range(256)
     }
 
-    # Add the special tokens to the vocabulary
+    # Add special tokens to vocabulary
     next_index = len(vocab)
     for special_token in special_tokens:
         vocab[next_index] = special_token.encode('utf-8')
         next_index += 1
 
-    # Pre-tokenization generates a frequency table of words
+    # Pre-tokenization pattern
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
+    
+    # Count word frequencies
     word_freq = defaultdict(int)
     with open(input_path, 'r') as f:
         for line in f:
             for word in re.findall(PAT, line):
                 word_freq[word.strip()] += 1
 
-    # Turn word_freq into split-up tuples of bytes
-    byte_freq: Dict[Tuple[bytes], int] = defaultdict(int)
+    # Convert words to byte sequences and count frequencies
+    byte_freq: Dict[Tuple[int], int] = defaultdict(int)
+    id_to_bytes = {i: b for i, b in vocab.items()}
+    bytes_to_id = {b: i for i, b in vocab.items()}
+    
+    # Convert words to token IDs
     for word, freq in word_freq.items():
-        byte_representation = tuple(word.encode('utf-8'))
-        byte_freq[byte_representation] += freq
+        word_bytes = word.encode('utf-8')
+        token_ids = tuple(bytes_to_id[bytes([b])] for b in word_bytes)
+        byte_freq[token_ids] += freq
 
-    # Initialize merges dictionary
+    # Track merges
     merges: Dict[Tuple[int, int], int] = {}
 
-    # Continue merging until we reach desired vocabulary size
+    # Main training loop
     while len(vocab) < vocab_size:
-        # Generate frequencies of pairs of bytes
-        pair_freq: Dict[Tuple[bytes, bytes], int] = defaultdict(int)
-
-        # Count frequencies of adjacent pairs in all words
-        for word_bytes, freq in byte_freq.items():
-            if len(word_bytes) < 2:
+        # Count pair frequencies using token IDs
+        pair_freq: Dict[Tuple[int, int], int] = defaultdict(int)
+        
+        for token_ids, freq in byte_freq.items():
+            if len(token_ids) < 2:
                 continue
-
-            # Find all pairs in current word
-            for i in range(len(word_bytes) - 1):
-                pair = (word_bytes[i], word_bytes[i + 1])
+            
+            for i in range(len(token_ids) - 1):
+                pair = (token_ids[i], token_ids[i + 1])
                 pair_freq[pair] += freq
 
-        # Find the most frequent pair
         if not pair_freq:
             break
 
+        # Find most frequent pair
         best_pair = max(pair_freq.items(), key=lambda x: x[1])[0]
-
-        # Create new token for the pair
-        new_token = best_pair[0] + best_pair[1]
-        vocab[next_index] = new_token
-
+        
+        # Create new token by concatenating the bytes
+        new_bytes = id_to_bytes[best_pair[0]] + id_to_bytes[best_pair[1]]
+        vocab[next_index] = new_bytes
+        id_to_bytes[next_index] = new_bytes
+        bytes_to_id[new_bytes] = next_index
+        
         # Record the merge
-        token1_id = next(k for k, v in vocab.items() if v == best_pair[0])
-        token2_id = next(k for k, v in vocab.items() if v == best_pair[1])
-        merges[(token1_id, token2_id)] = next_index
+        merges[best_pair] = next_index
 
-        # Update byte_freq with merged tokens
+        # Update token sequences
         new_byte_freq = defaultdict(int)
-        for word_bytes, freq in byte_freq.items():
-            new_word = []
+        for token_ids, freq in byte_freq.items():
+            new_tokens = []
             i = 0
-            while i < len(word_bytes):
-                if i < len(word_bytes) - 1 and (word_bytes[i], word_bytes[i + 1]) == best_pair:
-                    new_word.append(new_token)
+            while i < len(token_ids):
+                if i < len(token_ids) - 1 and (token_ids[i], token_ids[i + 1]) == best_pair:
+                    new_tokens.append(next_index)
                     i += 2
                 else:
-                    new_word.append(word_bytes[i])
+                    new_tokens.append(token_ids[i])
                     i += 1
-            new_byte_freq[tuple(new_word)] += freq
-
+            new_byte_freq[tuple(new_tokens)] += freq
+        
         byte_freq = new_byte_freq
         next_index += 1
 
