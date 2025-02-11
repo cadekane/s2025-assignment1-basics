@@ -7,6 +7,11 @@ from typing import IO, BinaryIO, Iterable, Optional, Type
 import numpy.typing as npt
 import torch
 
+from abc import ABC
+from typing import List, Tuple, Dict
+from collections import defaultdict
+from dataclasses import dataclass
+import regex as re
 
 def run_positionwise_feedforward(
     d_model: int,
@@ -569,4 +574,81 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    raise NotImplementedError
+    # Initialize vocabulary
+    vocab: Dict[int, bytes] = {
+        x: bytes([x]) for x in range(256)
+    }
+
+    # Add the special tokens to the vocabulary
+    next_index = len(vocab)
+    for special_token in special_tokens:
+        vocab[next_index] = special_token.encode('utf-8')
+        next_index += 1
+
+    # Pre-tokenization generates a frequency table of words
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
+    word_freq = defaultdict(int)
+    with open(input_path, 'r') as f:
+        for line in f:
+            for word in re.findall(PAT, line):
+                word_freq[word.strip()] += 1
+
+    # Turn word_freq into split-up tuples of bytes
+    byte_freq: Dict[Tuple[bytes], int] = defaultdict(int)
+    for word, freq in word_freq.items():
+        byte_representation = tuple(word.encode('utf-8'))
+        byte_freq[byte_representation] += freq
+
+    # Initialize merges dictionary
+    merges: Dict[Tuple[int, int], int] = {}
+
+    # Continue merging until we reach desired vocabulary size
+    while len(vocab) < vocab_size:
+        # Generate frequencies of pairs of bytes
+        pair_freq: Dict[Tuple[bytes, bytes], int] = defaultdict(int)
+
+        # Count frequencies of adjacent pairs in all words
+        for word_bytes, freq in byte_freq.items():
+            if len(word_bytes) < 2:
+                continue
+
+            # Find all pairs in current word
+            for i in range(len(word_bytes) - 1):
+                pair = (word_bytes[i], word_bytes[i + 1])
+                pair_freq[pair] += freq
+
+        # Find the most frequent pair
+        if not pair_freq:
+            break
+
+        best_pair = max(pair_freq.items(), key=lambda x: x[1])[0]
+
+        # Create new token for the pair
+        new_token = best_pair[0] + best_pair[1]
+        vocab[next_index] = new_token
+
+        # Record the merge
+        token1_id = next(k for k, v in vocab.items() if v == best_pair[0])
+        token2_id = next(k for k, v in vocab.items() if v == best_pair[1])
+        merges[(token1_id, token2_id)] = next_index
+
+        # Update byte_freq with merged tokens
+        new_byte_freq = defaultdict(int)
+        for word_bytes, freq in byte_freq.items():
+            new_word = []
+            i = 0
+            while i < len(word_bytes):
+                if i < len(word_bytes) - 1 and (word_bytes[i], word_bytes[i + 1]) == best_pair:
+                    new_word.append(new_token)
+                    i += 2
+                else:
+                    new_word.append(word_bytes[i])
+                    i += 1
+            new_byte_freq[tuple(new_word)] += freq
+
+        byte_freq = new_byte_freq
+        next_index += 1
+
+    return (vocab, merges)
+    # raise NotImplementedError
