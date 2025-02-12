@@ -625,7 +625,8 @@ def run_train_bpe(
             break
 
         # Find most frequent pair
-        best_pair = max(pair_freq.items(), key=lambda x: x[1])[0]
+        # best_pair = max(pair_freq.items(), key=lambda x: x[1])[0]
+        best_pair = max(pair_freq.items(), key=lambda x: (x[1], x[0]), default=None)[0] # incorporate lexico order
         
         # Add to vocabulary and record merge
         new_token = best_pair[0] + best_pair[1]
