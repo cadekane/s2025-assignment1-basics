@@ -307,6 +307,17 @@ def run_transformer_lm(
     """
     raise NotImplementedError
 
+class RMSNorm(torch.nn.Module):
+    def __init__(self, d_model: int, eps: float = 1e-5, weight: torch.FloatTensor = None):
+        super().__init__()
+        self.d_model = d_model
+        # self.weight = torch.nn.Parameter(torch.zeros(d_model)) # learnable affine transform
+        self.weight = weight.clone().detach()
+        self.eps = eps
+    
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
+        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps) # RMS(a)
+        return x / rms * self.weight # x is ai, weight is gi
 
 def run_rmsnorm(
     d_model: int,
@@ -336,8 +347,9 @@ def run_rmsnorm(
         FloatTensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
-
+    rmsnorm = RMSNorm(d_model, eps, weights["weight"])
+    return rmsnorm(in_features) # calls the forward function of rmsnorm
+    # raise NotImplementedError
 
 def run_gelu(in_features: torch.FloatTensor) -> torch.FloatTensor:
     """Given a tensor of inputs, return the output of applying GELU
