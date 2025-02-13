@@ -803,26 +803,13 @@ def run_train_bpe(
     
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-    # vocab = {
-    #     x: bytes([x]) for x in range(256)
-    # }
+    vocab = {
+        x: bytes([x]) for x in range(256)
+    }
 
-    # next_index = len(vocab) # figure out what to do with next index
-    # for special_token in special_tokens:
-    #     vocab[next_index] = special_token.encode('utf-8')
-
-    # Initialize vocabulary with special tokens first
-    vocab = {}
-    next_index = 0
-
+    next_index = len(vocab) # figure out what to do with next index
     for special_token in special_tokens:
         vocab[next_index] = special_token.encode('utf-8')
-        next_index += 1
-
-    # Then, add bytes (ASCII characters)
-    for x in range(256):
-        vocab[next_index] = bytes([x])
-        next_index += 1
 
     corpus = []
     with open(input_path, 'r') as f:
