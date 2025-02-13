@@ -800,7 +800,7 @@ def run_get_lr_cosine_schedule(
     
     # We're in the cosine decay phase
     # First, get progress through cosine phase (0 to 1)
-    cosine_progress = (it - warmup_iters) / cosine_cycle_iters
+    cosine_progress = (it - warmup_iters) / (cosine_cycle_iters - warmup_iters)
     
     # Compute cosine factor (goes from 1 to -1)
     cosine_factor = math.cos(math.pi * cosine_progress)
