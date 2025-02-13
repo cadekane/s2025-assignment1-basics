@@ -312,7 +312,7 @@ def run_transformer_block(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
-        weights=weights,
+        weights=weights["attn"],
         in_features=in_features
     )
     
@@ -323,7 +323,7 @@ def run_transformer_block(
     ffn_output = run_positionwise_feedforward(
         d_model=d_model,
         d_ff=d_ff,
-        weights=weights,
+        weights=weights["ffn"],
         in_features=attn_output
     )
     
