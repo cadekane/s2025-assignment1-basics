@@ -821,7 +821,7 @@ def run_train_bpe(
         print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
         splits = merge_pair(*best_pair, new_index, splits)
 
-    def compute_pair_freqs(splits):
+    def compute_pair_freqs(splits: Dict[str, List[int]]) -> Dict[Tuple[int, int], int]:
         pair_freqs = defaultdict(int)
         for word, freq in word_freqs.items():
             split = splits[word]
@@ -846,3 +846,5 @@ def run_train_bpe(
                     i += 1
             splits[word] = split
         return splits
+    
+    return (vocab, merges)
