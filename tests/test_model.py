@@ -173,6 +173,8 @@ def test_transformer_block():
     attn_pdrop = 0.0
     residual_pdrop = 0.0
 
+    print(reference_weights) # trying to check what the keys are…
+
     actual_output = run_transformer_block(
         d_model=d_model,
         num_heads=num_heads,
