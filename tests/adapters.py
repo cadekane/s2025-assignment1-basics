@@ -14,6 +14,17 @@ from dataclasses import dataclass
 import regex as re
 import torch.nn.functional as F
 
+class PositionwiseFeedForward(torch.nn.Module):
+    def __init__(self, d_model: int, d_ff: int, weights: dict[str, torch.FloatTensor] = None):
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff
+        self.w1 = weights["w1.weight"]
+        self.w2 = weights["w2.weight"]
+
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
+        return run_gelu(x @ self.w1.T) @ self.w2.T
+
 def run_positionwise_feedforward(
     d_model: int,
     d_ff: int,
@@ -49,7 +60,9 @@ def run_positionwise_feedforward(
     # You can also manually assign the weights
     # my_ffn.w1.weight.data = weights["w1.weight"]
     # my_ffn.w2.weight.data = weights["w2.weight"]
-    raise NotImplementedError
+
+    ffn = PositionwiseFeedForward(d_model, d_ff, weights)
+    return ffn(in_features) # calls the forward function of ffn
 
 
 def run_scaled_dot_product_attention(
