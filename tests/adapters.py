@@ -345,6 +345,7 @@ def run_transformer_block(
         running the Transformer block on the input features.
     """
 
+    # the weights are extremely confusing, I don't know how to use them
     new_weights = {
         "ln1": {
             "weight": weights["ln1.weight"],
@@ -610,7 +611,17 @@ def run_cross_entropy(inputs: torch.FloatTensor, targets: torch.LongTensor):
     Returns:
         Tensor of shape () with the average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    # Compute log softmax
+    log_probs = F.log_softmax(inputs, dim=1)
+    
+    # Select the log probabilities for the target classes
+    # gather() takes target indices and selects corresponding values from log_probs
+    target_log_probs = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+    
+    # Compute mean negative log probability
+    loss = -torch.mean(target_log_probs)
+    
+    return loss
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float):
