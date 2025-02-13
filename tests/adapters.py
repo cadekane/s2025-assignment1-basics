@@ -9,7 +9,7 @@ import torch
 
 from abc import ABC
 from typing import List, Tuple, Dict
-from collections import defaultdict
+from collections import defaultdict, Counter
 from dataclasses import dataclass
 import regex as re
 import torch.nn.functional as F
@@ -775,118 +775,74 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
     
-    @dataclass
-    class Pair:
-        """Represents a candidate merge pair with its frequency."""
-        first: bytes
-        second: bytes
-        freq: int
-        
-        def __lt__(self, other):
-            # First compare by frequency (higher is better)
-            if self.freq != other.freq:
-                return self.freq < other.freq
-            # Break ties by lexicographically greater pair
-            return (self.first + self.second) < (other.first + other.second)
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-    def get_pretokens(text: str) -> Counter[str]:
-        """Split text into pre-tokens and count their frequencies."""
-        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-        return Counter(re.findall(PAT, text))
+    vocab = {
+        x: bytes([x]) for x in range(256)
+    }
 
-    def get_byte_pairs(word: bytes, freq: int) -> Counter:
-        """Count all adjacent byte pairs in a word, weighted by word frequency."""
-        pairs = Counter()
-        if len(word) < 2:
-            return pairs
-            
-        for i in range(len(word) - 1):
-            pair = (word[i:i+1], word[i+1:i+2])
-            pairs[pair] += freq
-        return pairs
+    next_index = len(vocab) # figure out what to do with next index
+    for special_token in special_tokens:
+        vocab[next_index] = special_token.encode('utf-8')
 
-    def merge_pair(word: bytes, pair: Tuple[bytes, bytes]) -> bytes:
-        """Merge all occurrences of a byte pair in the word."""
-        first, second = pair
-        pattern = first + second
-        result = []
-        i = 0
-        while i < len(word):
-            if i < len(word) - len(pattern) + 1 and word[i:i+len(pattern)] == pattern:
-                result.extend(pattern)
-                i += len(pattern)
-            else:
-                result.append(word[i])
-                i += 1
-        return bytes(result)
+    corpus = []
+    with open(input_path, 'r') as f:
+        for line in f:
+            # line = f.readline()
+            line = re.findall(PAT, line)
+            corpus.append(line)
+
+    word_freqs = Counter([item for sublist in corpus for item in sublist])
+
+    splits = {word: list(map(int, word.encode('utf-8'))) for word in word_freqs.keys()}
     
-    # Read input data
-    with open(input_path, 'r', encoding='utf-8') as f:
-        text = f.read()
-    
-    # Get pre-tokens and their frequencies
-    pretoken_freqs = get_pretokens(text)
-    
-    # Initialize vocabulary with special tokens
-    vocab = {}
-    next_id = 0
-    
-    # Add special tokens first
-    for token in special_tokens:
-        vocab[next_id] = token.encode('utf-8')
-        next_id += 1
-    
-    # Convert pre-tokens to bytes and count unique bytes
-    byte_counts = Counter()
-    word_pieces = {}  # Keep track of current segmentation of each word
-    
-    for word, freq in pretoken_freqs.items():
-        word_bytes = word.encode('utf-8')
-        word_pieces[word] = word_bytes
-        for b in word_bytes:
-            byte_counts[bytes([b])] += freq
-    
-    # Add all unique bytes to vocabulary
-    for b in sorted(byte_counts):
-        vocab[next_id] = b
-        next_id += 1
-    
-    # Initialize merge tracking
     merges = []
 
-    # Perform merges until we reach desired vocab size
-    while len(vocab) < vocab_size:
-        # Count pairs across all words, weighted by word frequency
-        pair_counts = Counter()
-        for word, freq in pretoken_freqs.items():
-            pairs = get_byte_pairs(word_pieces[word], freq)
-            pair_counts.update(pairs)
-            
-        if not pair_counts:
-            break
-            
-        # Find best pair (highest frequency, break ties by lexicographically greater)
-        best_pair = max(
-            (Pair(first, second, freq) 
-             for (first, second), freq in pair_counts.items()),
-        )
-        
-        # Add merged token to vocabulary
-        merged_token = best_pair.first + best_pair.second
-        vocab[next_id] = merged_token
-        next_id += 1
-        
-        # Record the merge
-        merges.append((best_pair.first, best_pair.second))
-        
-        # Apply the merge to all words
-        for word in word_pieces:
-            word_pieces[word] = merge_pair(
-                word_pieces[word], 
-                (best_pair.first, best_pair.second)
-            )
-        
-        if len(vocab) >= vocab_size:
-            break
-    
-    return vocab, merges
+    for i in range(vocab_size):
+
+        # Find the most common pair.
+        best_pair = None
+        max_freq = -1  # Start with an invalid frequency
+
+        pair_freqs = compute_pair_freqs(splits)
+
+        for pair, freq in pair_freqs.items():
+            if freq > max_freq or (freq == max_freq and pair > best_pair):
+                best_pair = pair
+                max_freq = freq # not necessary I don't think.
+        print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
+
+        # Merge that pair.
+        new_index = len(vocab) + i # 256 + i
+        # merges[best_pair] = new_index
+        merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
+        vocab[new_index] = vocab[best_pair[0]] + vocab[best_pair[1]] # assign next open int in dict to the byte combination of the best pair
+
+        print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
+        splits = merge_pair(*best_pair, new_index, splits)
+
+    def compute_pair_freqs(splits):
+        pair_freqs = defaultdict(int)
+        for word, freq in word_freqs.items():
+            split = splits[word]
+            if len(split) == 1:
+                continue
+            for i in range(len(split) - 1):
+                pair = (split[i], split[i + 1])
+                pair_freqs[pair] += freq
+        return pair_freqs
+
+    def merge_pair(a, b, new_index, splits): 
+        for word in word_freqs:
+            split = splits[word]
+            if len(split) == 1:
+                continue
+
+            i = 0
+            while i < len(split) - 1:
+                if split[i] == a and split[i + 1] == b:
+                    split = split[:i] + [new_index] + split[i + 2 :] # replace the pair with just the one new int that represents that combination in the vocab
+                else:
+                    i += 1
+            splits[word] = split
+        return splits
