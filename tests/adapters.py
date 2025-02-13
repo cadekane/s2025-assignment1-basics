@@ -644,14 +644,34 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     Args:
         parameters: collection of trainable parameters.
-        max_l2_norm: a positive value containing the maximum l2-norm.
+        max_l2_norm: a positive value containing the maximum l2-norm. (M)
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
 
     Returns:
         None
     """
-    raise NotImplementedError
+    # Filter parameters that have gradients
+    parameters = [p for p in parameters if p.grad is not None]
+    
+    if not parameters:
+        return  # No gradients to clip
+    
+    # Compute total l2 norm of all gradients combined
+    eps = 1e-6  # PyTorch default epsilon
+    total_norm = torch.norm(
+        torch.stack([
+            torch.norm(p.grad.detach(), 2) 
+            for p in parameters
+        ]), 
+        2
+    )
+    
+    # If total norm exceeds max_l2_norm, scale all gradients
+    clip_coef = max_l2_norm / (total_norm + eps)
+    if clip_coef < 1:  # Only clip if norm exceeds threshold
+        for p in parameters:
+            p.grad.detach().mul_(clip_coef)
 
 class AdamW(torch.optim.Optimizer):
     """Implements AdamW optimizer with weight decay fix.
