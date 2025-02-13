@@ -127,7 +127,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
     def __init__(self, d_model: int, num_heads: int, attn_pdrop: float, weights: dict[str, torch.FloatTensor]):
         
         super().__init__()
-        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+        # assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         
         self.d_model = d_model
         self.num_heads = num_heads
@@ -155,6 +155,12 @@ class MultiHeadSelfAttention(torch.nn.Module):
         self.W_v.weight.data = v_weights
         self.W_o.weight.data = weights["output_proj.weight"]
 
+    def _causal_mask(self, seq_len: int) -> torch.BoolTensor:
+        """Returns a causal mask to prevent attending to future tokens."""
+        mask = torch.ones(seq_len, seq_len)
+        mask = torch.triu(mask, diagonal=0) # Upper triangular part is zeroed
+        return mask.bool()
+
     def forward(self, in_features: torch.FloatTensor) -> torch.FloatTensor:
 
         batch_size, seq_len, _ = in_features.shape
@@ -167,8 +173,11 @@ class MultiHeadSelfAttention(torch.nn.Module):
         # Transpose for attention computation (batch, num_heads, seq_len, head_dim)
         Q, K, V = Q.transpose(1, 2), K.transpose(1, 2), V.transpose(1, 2)
 
+        # Compute causal mask
+        causal_mask = self._causal_mask(seq_len).to(in_features.device) # move mask to same device as input
+
         # Compute attention (uses run_scaled_dot_product_attention)
-        attn_output = run_scaled_dot_product_attention(K, Q, V, pdrop=self.attn_pdrop)
+        attn_output = run_scaled_dot_product_attention(K, Q, V, causal_mask, pdrop=self.attn_pdrop)
 
         # Concatenate heads (batch, num_heads, seq_len, head_dim) -> (batch, seq_len, d_model)
         attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
