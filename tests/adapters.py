@@ -104,7 +104,24 @@ def run_scaled_dot_product_attention(
         with the output of running your scaled dot product attention
         implementation with the provided key, query, and value tensors.
     """
-    raise NotImplementedError
+
+    d_k = K.shape[-1]
+    scores = torch.matmul(Q, K.transpose(-2, -1)) / (d_k ** 0.5)
+
+    # Apply mask if provided
+    if mask is not None:
+        scores = scores.masked_fill(mask, float("-inf"))
+    
+    # Compute attention probabilities
+    attn_probs = run_softmax(scores, dim=-1)
+
+    # Apply dropout if provided
+    if pdrop is not None:
+        attn_probs = F.dropout(attn_probs, pdrop)
+    
+    output = torch.matmul(attn_probs, V)
+
+    return output
 
 
 def run_multihead_self_attention(
