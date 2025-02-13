@@ -346,7 +346,7 @@ def run_transformer_block(
     """
 
     new_weights = {
-        "ln": {
+        "ln1": {
             "weight": weights["ln1.weight"],
         },
         # "attn": {
