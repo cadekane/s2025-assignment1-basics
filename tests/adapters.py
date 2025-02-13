@@ -774,6 +774,32 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
+
+    def compute_pair_freqs(splits: Dict[str, List[int]]) -> Dict[Tuple[int, int], int]:
+        pair_freqs = defaultdict(int)
+        for word, freq in word_freqs.items():
+            split = splits[word]
+            if len(split) == 1:
+                continue
+            for i in range(len(split) - 1):
+                pair = (split[i], split[i + 1])
+                pair_freqs[pair] += freq
+        return pair_freqs
+
+    def merge_pair(a, b, new_index, splits): 
+        for word in word_freqs:
+            split = splits[word]
+            if len(split) == 1:
+                continue
+
+            i = 0
+            while i < len(split) - 1:
+                if split[i] == a and split[i + 1] == b:
+                    split = split[:i] + [new_index] + split[i + 2 :] # replace the pair with just the one new int that represents that combination in the vocab
+                else:
+                    i += 1
+            splits[word] = split
+        return splits
     
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
@@ -820,31 +846,5 @@ def run_train_bpe(
 
         print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
         splits = merge_pair(*best_pair, new_index, splits)
-
-    def compute_pair_freqs(splits: Dict[str, List[int]]) -> Dict[Tuple[int, int], int]:
-        pair_freqs = defaultdict(int)
-        for word, freq in word_freqs.items():
-            split = splits[word]
-            if len(split) == 1:
-                continue
-            for i in range(len(split) - 1):
-                pair = (split[i], split[i + 1])
-                pair_freqs[pair] += freq
-        return pair_freqs
-
-    def merge_pair(a, b, new_index, splits): 
-        for word in word_freqs:
-            split = splits[word]
-            if len(split) == 1:
-                continue
-
-            i = 0
-            while i < len(split) - 1:
-                if split[i] == a and split[i + 1] == b:
-                    split = split[:i] + [new_index] + split[i + 2 :] # replace the pair with just the one new int that represents that combination in the vocab
-                else:
-                    i += 1
-            splits[word] = split
-        return splits
     
     return (vocab, merges)
