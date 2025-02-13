@@ -307,8 +307,12 @@ def run_transformer_block(
         running the Transformer block on the input features.
     """
 
+    rmsnorm_1_weight = {
+        "weight": weights["ln1.weight"]
+    }
+
     # RMSNorm
-    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln1'], in_features=in_features)
+    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=rmsnorm_1_weight, in_features=in_features)
 
     # Multi-head Self-Attention
     x = run_multihead_self_attention(
