@@ -307,30 +307,37 @@ def run_transformer_block(
         running the Transformer block on the input features.
     """
 
-    # Step 1: Multi-head Self-Attention
-    attn_output = run_multihead_self_attention(
+    # RMSNorm
+    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln1'], in_features=in_features)
+
+    # Multi-head Self-Attention
+    x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
         weights=weights["attn"],
-        in_features=in_features
+        in_features=x
     )
-    
-    # Step 2: Add & Norm (Residual Connection + RMSNorm)
-    attn_output = run_rmsnorm(attn_output + in_features, weights['ln1.weight'])
-    
-    # Step 3: Feedforward Network
-    ffn_output = run_positionwise_feedforward(
+
+    # Add
+    x = x + in_features
+
+    # RMSNorm 2
+    x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln2'], in_features=x)
+
+    # Positionwise Feedforward
+    x2 = run_positionwise_feedforward(
         d_model=d_model,
         d_ff=d_ff,
         weights=weights["ffn"],
-        in_features=attn_output
+        in_features=x2
     )
-    
-    # Step 4: Add & Norm (Residual Connection + RMSNorm)
-    ffn_output = run_rmsnorm(ffn_output + attn_output, weights['ln2.weight'])
-    
-    return ffn_output
+
+    # Dropout
+    x2 = F.dropout(x2, residual_pdrop)
+
+    # Add
+    return x2 + x
 
 
 def run_transformer_lm(
