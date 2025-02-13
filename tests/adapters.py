@@ -308,7 +308,7 @@ def run_transformer_block(
     """
 
     # RMSNorm
-    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights.ln1, in_features=in_features)
+    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln1'], in_features=in_features)
 
     # Multi-head Self-Attention
     x = run_multihead_self_attention(
@@ -323,7 +323,7 @@ def run_transformer_block(
     x = x + in_features
 
     # RMSNorm 2
-    x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights.ln2, in_features=x)
+    x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln2'], in_features=x)
 
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
