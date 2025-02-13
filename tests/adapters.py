@@ -372,7 +372,7 @@ def run_transformer_block(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
-        weights=weights["attn"],
+        weights=reformat_attention_weights(weights, num_heads, d_model),
         in_features=x
     )
 
