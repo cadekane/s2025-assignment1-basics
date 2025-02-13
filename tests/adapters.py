@@ -156,7 +156,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
         self.W_o.weight.data = weights["output_proj.weight"]
 
     def forward(self, in_features: torch.FloatTensor) -> torch.FloatTensor:
-        
+
         batch_size, seq_len, _ = in_features.shape
 
         # Compute Q, K, V (batch, seq_len, d_model) -> (batch, seq_len, num_heads, head_dim)
@@ -224,7 +224,9 @@ def run_multihead_self_attention(
         torch.FloatTensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    multihead_attn = MultiHeadSelfAttention(d_model, num_heads, attn_pdrop, weights)
+    return multihead_attn(in_features) # calls the forward function of multihead_attn
+    # raise NotImplementedError
 
 
 def run_transformer_block(
