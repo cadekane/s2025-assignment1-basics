@@ -795,7 +795,7 @@ def run_get_lr_cosine_schedule(
         return (it / warmup_iters) * max_learning_rate
     
     # If we're past the cosine cycle
-    if it >= warmup_iters + cosine_cycle_iters:
+    if it > cosine_cycle_iters:
         return min_learning_rate
     
     # We're in the cosine decay phase
