@@ -344,22 +344,38 @@ def run_transformer_block(
         FloatTensor of shape (batch_size, sequence_length, d_model) with the output of
         running the Transformer block on the input features.
     """
+    
+    def reformat_attention_weights(weights: dict, num_heads: int, d_model: int) -> dict:
+        """Reformat attention weights from the provided format into the format expected by run_multihead_self_attention."""
+        
+        # Calculate dimensions
+        d_head = d_model // num_heads  # dimension per head
+        
+        # Get the concatenated weights
+        q_weights = weights["attn.q_proj.weight"]  # Shape: (num_heads * d_head, d_model)
+        k_weights = weights["attn.k_proj.weight"]
+        v_weights = weights["attn.v_proj.weight"]
+        output_weights = weights["attn.output_proj.weight"]
+        
+        # Reshape the weights into per-head format
+        # From: (num_heads * d_head, d_model)
+        # To: (num_heads, d_head, d_model)
+        q_weights = q_weights.view(num_heads, d_head, d_model)
+        k_weights = k_weights.view(num_heads, d_head, d_model)
+        v_weights = v_weights.view(num_heads, d_head, d_model)
+        
+        return {
+            "q": q_weights,  # Shape: (num_heads, d_head, d_model)
+            "k": k_weights,  # Shape: (num_heads, d_head, d_model)
+            "v": v_weights,  # Shape: (num_heads, d_head, d_model)
+            "output": output_weights  # Shape: (d_model, d_model)
+    }
 
     # the weights are extremely confusing, I don't know how to use them
     new_weights = {
         "ln1": {
             "weight": weights["ln1.weight"],
         },
-        # "attn": {
-        #     "q": weights["attn.q_proj.weight"],
-        #     "k": weights["attn.k_proj.weight"],
-        #     "v": weights["attn.v_proj.weight"],
-        #     "output": weights["attn.output_proj.weight"],
-        # },
-        # "ffn": {
-        #     "w1": weights["ffn.w1.weight"],
-        #     "w2": weights["ffn.w2.weight"],
-        # },
         "ln2": {
             "weight": weights["ln2.weight"],
         },
@@ -369,11 +385,12 @@ def run_transformer_block(
     x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights["ln1"], in_features=in_features)
 
     # Multi-head Self-Attention
+    attention_weights = reformat_attention_weights(weights, num_heads, d_model)
     x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
-        weights=reformat_attention_weights(weights, num_heads, d_model), # ?????
+        weights=attention_weights,
         in_features=x
     )
 
@@ -383,11 +400,15 @@ def run_transformer_block(
     # RMSNorm 2
     x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights['ln2'], in_features=x)
 
+    ffn_weights = {
+        "w1": weights["ffn.w1.weight"],
+        "w2": weights["ffn.w2.weight"]
+    } 
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
         d_model=d_model,
         d_ff=d_ff,
-        weights=weights["ffn"],
+        weights=ffn_weights,
         in_features=x2
     )
 
