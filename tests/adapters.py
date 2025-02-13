@@ -364,7 +364,7 @@ def run_transformer_block(
         },
     }
 
-    # RMSNorm
+    # RMSNorm, I think the weights are good for this. The issue is for multihead and feed forward…
     x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights["ln1"], in_features=in_features)
 
     # Multi-head Self-Attention
@@ -372,7 +372,7 @@ def run_transformer_block(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
-        weights=reformat_attention_weights(weights, num_heads, d_model),
+        weights=reformat_attention_weights(weights, num_heads, d_model), # ?????
         in_features=x
     )
 
@@ -775,36 +775,59 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
     
-    def get_byte_pairs(text: bytes) -> Counter:
-        """Count all adjacent byte pairs in the text."""
+    @dataclass
+    class Pair:
+        """Represents a candidate merge pair with its frequency."""
+        first: bytes
+        second: bytes
+        freq: int
+        
+        def __lt__(self, other):
+            # First compare by frequency (higher is better)
+            if self.freq != other.freq:
+                return self.freq < other.freq
+            # Break ties by lexicographically greater pair
+            return (self.first + self.second) < (other.first + other.second)
+
+    def get_pretokens(text: str) -> Counter[str]:
+        """Split text into pre-tokens and count their frequencies."""
+        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+        return Counter(re.findall(PAT, text))
+
+    def get_byte_pairs(word: bytes, freq: int) -> Counter:
+        """Count all adjacent byte pairs in a word, weighted by word frequency."""
         pairs = Counter()
-        prev_byte = text[0:1]
-        for b in text[1:]:
-            curr_byte = bytes([b])
-            pairs[prev_byte + curr_byte] += 1
-            prev_byte = curr_byte
+        if len(word) < 2:
+            return pairs
+            
+        for i in range(len(word) - 1):
+            pair = (word[i:i+1], word[i+1:i+2])
+            pairs[pair] += freq
         return pairs
 
-    def merge_pair(text: bytes, pair: Tuple[bytes, bytes]) -> bytes:
-        """Merge all occurrences of a byte pair in the text."""
+    def merge_pair(word: bytes, pair: Tuple[bytes, bytes]) -> bytes:
+        """Merge all occurrences of a byte pair in the word."""
         first, second = pair
         pattern = first + second
         result = []
         i = 0
-        while i < len(text):
-            if i < len(text) - len(pattern) + 1 and text[i:i+len(pattern)] == pattern:
+        while i < len(word):
+            if i < len(word) - len(pattern) + 1 and word[i:i+len(pattern)] == pattern:
                 result.extend(pattern)
                 i += len(pattern)
             else:
-                result.append(text[i])
+                result.append(word[i])
                 i += 1
         return bytes(result)
-
-    # Read input data
-    with open(input_path, 'rb') as f:
-        data = f.read()
     
-    # Initialize vocabulary with bytes and special tokens
+    # Read input data
+    with open(input_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    # Get pre-tokens and their frequencies
+    pretoken_freqs = get_pretokens(text)
+    
+    # Initialize vocabulary with special tokens
     vocab = {}
     next_id = 0
     
@@ -813,37 +836,55 @@ def run_train_bpe(
         vocab[next_id] = token.encode('utf-8')
         next_id += 1
     
-    # Add all unique bytes from the input
-    byte_counts = Counter(data)
+    # Convert pre-tokens to bytes and count unique bytes
+    byte_counts = Counter()
+    word_pieces = {}  # Keep track of current segmentation of each word
+    
+    for word, freq in pretoken_freqs.items():
+        word_bytes = word.encode('utf-8')
+        word_pieces[word] = word_bytes
+        for b in word_bytes:
+            byte_counts[bytes([b])] += freq
+    
+    # Add all unique bytes to vocabulary
     for b in sorted(byte_counts):
-        vocab[next_id] = bytes([b])
+        vocab[next_id] = b
         next_id += 1
     
     # Initialize merge tracking
     merges = []
-    current_text = data
-    
+
     # Perform merges until we reach desired vocab size
     while len(vocab) < vocab_size:
-        # Count all adjacent pairs
-        pairs = get_byte_pairs(current_text)
-        if not pairs:
+        # Count pairs across all words, weighted by word frequency
+        pair_counts = Counter()
+        for word, freq in pretoken_freqs.items():
+            pairs = get_byte_pairs(word_pieces[word], freq)
+            pair_counts.update(pairs)
+            
+        if not pair_counts:
             break
             
-        # Find most frequent pair
-        best_pair = max(pairs.items(), key=lambda x: x[1])[0]
-        first_token, second_token = best_pair[:1], best_pair[1:]
+        # Find best pair (highest frequency, break ties by lexicographically greater)
+        best_pair = max(
+            (Pair(first, second, freq) 
+             for (first, second), freq in pair_counts.items()),
+        )
         
         # Add merged token to vocabulary
-        merged_token = best_pair
+        merged_token = best_pair.first + best_pair.second
         vocab[next_id] = merged_token
         next_id += 1
         
         # Record the merge
-        merges.append((first_token, second_token))
+        merges.append((best_pair.first, best_pair.second))
         
-        # Apply the merge throughout the text
-        current_text = merge_pair(current_text, (first_token, second_token))
+        # Apply the merge to all words
+        for word in word_pieces:
+            word_pieces[word] = merge_pair(
+                word_pieces[word], 
+                (best_pair.first, best_pair.second)
+            )
         
         if len(vocab) >= vocab_size:
             break
