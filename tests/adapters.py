@@ -123,6 +123,33 @@ def run_scaled_dot_product_attention(
 
     return output
 
+class MultiHeadSelfAttention(torch.nn.Module):
+    def __init__(self, d_model: int, num_heads: int, attn_pdrop: float, weights: dict[str, torch.FloatTensor] = None):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.attn_pdrop = attn_pdrop
+        self.q_proj = weights["q_proj.{num_heads}.weight"]
+        self.k_proj = weights["k_proj.{num_heads}.weight"]
+        self.v_proj = weights["v_proj.{num_heads}.weight"]
+        self.output_proj = weights["output_proj.weight"]
+
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
+        batch_size, seq_len, _ = x.shape
+        d_k = self.d_model // self.num_heads
+
+        # Project the input into key, query, and value tensors
+        K = x @ self.k_proj.T
+        Q = x @ self.q_proj.T
+        V = x @ self.v_proj.T
+
+        # Split the key, query, and value tensors into multiple heads
+        K = K.view(batch_size, seq_len, self.num_heads, d_k)
+        Q = Q.view(batch_size, seq_len, self.num_heads, d_k)
+        V = V.view(batch_size, seq_len, self.num_heads, d_k)
+
+        # Run scaled dot product attention
+        output = run_scaled_dot_product_attention(K, Q, V, pdrop=self.attn_pdrop)
 
 def run_multihead_self_attention(
     d_model: int,
@@ -589,6 +616,9 @@ def get_tokenizer(
     """
     raise NotImplementedError
 
+import os
+from collections import defaultdict, Counter
+from typing import Dict, List, Set, Tuple
 
 def run_train_bpe(
     input_path: str | os.PathLike,
@@ -620,79 +650,78 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    # Pre-tokenization pattern
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
-    word_freqs = defaultdict(int)
-    with open(input_path, 'r') as f:
-        for line in f:
-            words = re.findall(PAT, line)
-            for word in words:
-                word_freqs[word] += 1
-    print(word_freqs)
-
-    alphabet = []
-    for word in word_freqs.keys():
-        for letter in word:
-            if letter not in alphabet:
-                alphabet.append(letter)
-    alphabet.sort()
-    print(alphabet)
-
-    vocab = ["<|endoftext|>"] + alphabet.copy()
-
-    splits = {word: [c for c in word] for word in word_freqs.keys()}
-    print(splits)
-
-    def compute_pair_freqs(splits):
-        pair_freqs = defaultdict(int)
-        for word, freq in word_freqs.items():
-            split = splits[word]
-            if len(split) == 1:
-                continue
-            for i in range(len(split) - 1):
-                pair = (split[i], split[i + 1])
-                pair_freqs[pair] += freq
-        return pair_freqs
     
-    # pair_freqs = compute_pair_freqs(splits)
-    # for i, key in enumerate(pair_freqs.keys()):
-    #     print(f"{key}: {pair_freqs[key]}")
-    #     if i >= 5:
-    #         break
+    def get_byte_pairs(text: bytes) -> Counter:
+        """Count all adjacent byte pairs in the text."""
+        pairs = Counter()
+        prev_byte = text[0:1]
+        for b in text[1:]:
+            curr_byte = bytes([b])
+            pairs[prev_byte + curr_byte] += 1
+            prev_byte = curr_byte
+        return pairs
+
+    def merge_pair(text: bytes, pair: Tuple[bytes, bytes]) -> bytes:
+        """Merge all occurrences of a byte pair in the text."""
+        first, second = pair
+        pattern = first + second
+        result = []
+        i = 0
+        while i < len(text):
+            if i < len(text) - len(pattern) + 1 and text[i:i+len(pattern)] == pattern:
+                result.extend(pattern)
+                i += len(pattern)
+            else:
+                result.append(text[i])
+                i += 1
+        return bytes(result)
+
+    # Read input data
+    with open(input_path, 'rb') as f:
+        data = f.read()
     
-    def merge_pair(a, b, splits):
-        for word in word_freqs:
-            split = splits[word]
-            if len(split) == 1:
-                continue
-
-            i = 0
-            while i < len(split) - 1:
-                if split[i] == a and split[i + 1] == b:
-                    split = split[:i] + [a + b] + split[i + 2 :]
-                else:
-                    i += 1
-            splits[word] = split
-        return splits
-
-    # vocab_size = 50
-
-    merges = {}
+    # Initialize vocabulary with bytes and special tokens
+    vocab = {}
+    next_id = 0
+    
+    # Add special tokens first
+    for token in special_tokens:
+        vocab[next_id] = token.encode('utf-8')
+        next_id += 1
+    
+    # Add all unique bytes from the input
+    byte_counts = Counter(data)
+    for b in sorted(byte_counts):
+        vocab[next_id] = bytes([b])
+        next_id += 1
+    
+    # Initialize merge tracking
+    merges = []
+    current_text = data
+    
+    # Perform merges until we reach desired vocab size
     while len(vocab) < vocab_size:
-        pair_freqs = compute_pair_freqs(splits)
-        best_pair = ""
-        max_freq = None
-        for pair, freq in pair_freqs.items():
-            if max_freq is None or max_freq < freq:
-                best_pair = pair
-                max_freq = freq
-        splits = merge_pair(*best_pair, splits)
-        merges[best_pair] = best_pair[0] + best_pair[1]
-        vocab.append(best_pair[0] + best_pair[1])
-
-    print(vocab)
-    print(merges)
-
-    return (vocab, merges)
-    # raise NotImplementedError
+        # Count all adjacent pairs
+        pairs = get_byte_pairs(current_text)
+        if not pairs:
+            break
+            
+        # Find most frequent pair
+        best_pair = max(pairs.items(), key=lambda x: x[1])[0]
+        first_token, second_token = best_pair[:1], best_pair[1:]
+        
+        # Add merged token to vocabulary
+        merged_token = best_pair
+        vocab[next_id] = merged_token
+        next_id += 1
+        
+        # Record the merge
+        merges.append((first_token, second_token))
+        
+        # Apply the merge throughout the text
+        current_text = merge_pair(current_text, (first_token, second_token))
+        
+        if len(vocab) >= vocab_size:
+            break
+    
+    return vocab, merges
