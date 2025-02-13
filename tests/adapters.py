@@ -235,7 +235,6 @@ def run_multihead_self_attention(
     """
     multihead_attn = MultiHeadSelfAttention(d_model, num_heads, attn_pdrop, weights)
     return multihead_attn(in_features) # calls the forward function of multihead_attn
-    # raise NotImplementedError
 
 
 def run_transformer_block(
@@ -307,7 +306,21 @@ def run_transformer_block(
         FloatTensor of shape (batch_size, sequence_length, d_model) with the output of
         running the Transformer block on the input features.
     """
-    raise NotImplementedError
+
+    # Normalize the input features with RMSNorm
+    x = run_rmsnorm(d_model, 1e-5, weights["ln1"], in_features)
+
+    # Apply multi-head self-attention
+    x = run_multihead_self_attention(d_model, num_heads, attn_pdrop, weights, x)
+
+    # Apply feed-forward network
+    x = run_positionwise_feedforward(d_model, d_ff, weights, x)
+
+    # Apply dropout? 
+    x = F.dropout(x, residual_pdrop)
+
+    # Add residual connection
+    return x + in_features
 
 
 def run_transformer_lm(
