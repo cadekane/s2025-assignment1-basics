@@ -124,32 +124,58 @@ def run_scaled_dot_product_attention(
     return output
 
 class MultiHeadSelfAttention(torch.nn.Module):
-    def __init__(self, d_model: int, num_heads: int, attn_pdrop: float, weights: dict[str, torch.FloatTensor] = None):
+    def __init__(self, d_model: int, num_heads: int, attn_pdrop: float, weights: dict[str, torch.FloatTensor]):
+        
         super().__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+        
         self.d_model = d_model
         self.num_heads = num_heads
+        self.head_dim = d_model // num_heads  # Each head's dimension
         self.attn_pdrop = attn_pdrop
-        self.q_proj = weights["q_proj.{num_heads}.weight"]
-        self.k_proj = weights["k_proj.{num_heads}.weight"]
-        self.v_proj = weights["v_proj.{num_heads}.weight"]
-        self.output_proj = weights["output_proj.weight"]
 
-    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
-        batch_size, seq_len, _ = x.shape
-        d_k = self.d_model // self.num_heads
+        # Create batched weight matrices for Q, K, V
+        self.W_q = torch.nn.Linear(d_model, d_model, bias=False)
+        self.W_k = torch.nn.Linear(d_model, d_model, bias=False)
+        self.W_v = torch.nn.Linear(d_model, d_model, bias=False)
+        self.W_o = torch.nn.Linear(d_model, d_model, bias=False)  # Output projection (W^O)
 
-        # Project the input into key, query, and value tensors
-        K = x @ self.k_proj.T
-        Q = x @ self.q_proj.T
-        V = x @ self.v_proj.T
+        # Load weights
+        self._load_weights(weights)
 
-        # Split the key, query, and value tensors into multiple heads
-        K = K.view(batch_size, seq_len, self.num_heads, d_k)
-        Q = Q.view(batch_size, seq_len, self.num_heads, d_k)
-        V = V.view(batch_size, seq_len, self.num_heads, d_k)
+    def _load_weights(self, weights: dict[str, torch.FloatTensor]):
+        """Loads provided weights into model layers."""
+        # Stack per-head weights into a single projection matrix
+        q_weights = torch.cat([weights[f"q_heads.{i}.weight"] for i in range(self.num_heads)], dim=0)
+        k_weights = torch.cat([weights[f"k_heads.{i}.weight"] for i in range(self.num_heads)], dim=0)
+        v_weights = torch.cat([weights[f"v_heads.{i}.weight"] for i in range(self.num_heads)], dim=0)
 
-        # Run scaled dot product attention
-        output = run_scaled_dot_product_attention(K, Q, V, pdrop=self.attn_pdrop)
+        self.W_q.weight.data = q_weights
+        self.W_k.weight.data = k_weights
+        self.W_v.weight.data = v_weights
+        self.W_o.weight.data = weights["output_proj.weight"]
+
+    def forward(self, in_features: torch.FloatTensor) -> torch.FloatTensor:
+        
+        batch_size, seq_len, _ = in_features.shape
+
+        # Compute Q, K, V (batch, seq_len, d_model) -> (batch, seq_len, num_heads, head_dim)
+        Q = self.W_q(in_features).view(batch_size, seq_len, self.num_heads, self.head_dim)
+        K = self.W_k(in_features).view(batch_size, seq_len, self.num_heads, self.head_dim)
+        V = self.W_v(in_features).view(batch_size, seq_len, self.num_heads, self.head_dim)
+
+        # Transpose for attention computation (batch, num_heads, seq_len, head_dim)
+        Q, K, V = Q.transpose(1, 2), K.transpose(1, 2), V.transpose(1, 2)
+
+        # Compute attention (uses run_scaled_dot_product_attention)
+        attn_output = run_scaled_dot_product_attention(K, Q, V, pdrop=self.attn_pdrop)
+
+        # Concatenate heads (batch, num_heads, seq_len, head_dim) -> (batch, seq_len, d_model)
+        attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+
+        # Final output projection
+        return self.W_o(attn_output)
+
 
 def run_multihead_self_attention(
     d_model: int,
