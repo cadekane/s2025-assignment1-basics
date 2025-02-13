@@ -158,7 +158,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
     def _causal_mask(self, seq_len: int) -> torch.BoolTensor:
         """Returns a causal mask to prevent attending to future tokens."""
         mask = torch.ones(seq_len, seq_len)
-        mask = torch.triu(mask, diagonal=0) # Upper triangular part is zeroed
+        mask = torch.triu(mask, diagonal=1) # Upper triangular part is zeroed
         return mask.bool()
 
     def forward(self, in_features: torch.FloatTensor) -> torch.FloatTensor:
