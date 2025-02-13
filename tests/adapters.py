@@ -237,6 +237,44 @@ def run_multihead_self_attention(
     return multihead_attn(in_features) # calls the forward function of multihead_attn
 
 
+def reformat_attention_weights(state_dict: dict, num_heads: int, d_model: int):
+    """
+    Reformat the attention weights into the format required by multi-head self-attention.
+
+    Args:
+        state_dict (dict): The state dict containing the model weights.
+        num_heads (int): The number of attention heads.
+        d_model (int): The dimensionality of the model.
+
+    Returns:
+        dict: A dictionary with restructured weights for multi-head self-attention.
+    """
+    # Dimensionality of each head (query, key, value)
+    d_k = d_model // num_heads  # Dimensionality of query and key
+    d_v = d_model // num_heads  # Dimensionality of value
+
+    # Extract individual weights for queries, keys, values, and output
+    q_proj_weight = state_dict['attn.q_proj.weight']  # Shape: (num_heads * (d_model / num_heads), d_model)
+    k_proj_weight = state_dict['attn.k_proj.weight']  # Shape: (num_heads * (d_model / num_heads), d_model)
+    v_proj_weight = state_dict['attn.v_proj.weight']  # Shape: (num_heads * (d_model / num_heads), d_model)
+    output_proj_weight = state_dict['attn.output_proj.weight']  # Shape: (d_model, (d_model / num_heads) * num_heads)
+
+    # Reshape query, key, and value weights into separate head matrices
+    q_heads = q_proj_weight.view(num_heads, d_k, d_model)  # Shape: (num_heads, d_k, d_model)
+    k_heads = k_proj_weight.view(num_heads, d_k, d_model)  # Shape: (num_heads, d_k, d_model)
+    v_heads = v_proj_weight.view(num_heads, d_v, d_model)  # Shape: (num_heads, d_v, d_model)
+
+    # Return the formatted weights as a dictionary
+    weights = {
+        'q_heads': q_heads,
+        'k_heads': k_heads,
+        'v_heads': v_heads,
+        'output_proj': output_proj_weight
+    }
+
+    return weights
+
+
 def run_transformer_block(
     d_model: int,
     num_heads: int,
@@ -307,12 +345,27 @@ def run_transformer_block(
         running the Transformer block on the input features.
     """
 
-    rmsnorm_1_weight = {
-        "weight": weights["ln1.weight"]
+    new_weights = {
+        "ln": {
+            "weight": weights["ln1.weight"],
+        },
+        # "attn": {
+        #     "q": weights["attn.q_proj.weight"],
+        #     "k": weights["attn.k_proj.weight"],
+        #     "v": weights["attn.v_proj.weight"],
+        #     "output": weights["attn.output_proj.weight"],
+        # },
+        # "ffn": {
+        #     "w1": weights["ffn.w1.weight"],
+        #     "w2": weights["ffn.w2.weight"],
+        # },
+        "ln2": {
+            "weight": weights["ln2.weight"],
+        },
     }
 
     # RMSNorm
-    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=rmsnorm_1_weight, in_features=in_features)
+    x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights["ln1"], in_features=in_features)
 
     # Multi-head Self-Attention
     x = run_multihead_self_attention(
@@ -327,7 +380,7 @@ def run_transformer_block(
     x = x + in_features
 
     # RMSNorm 2
-    x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=weights['ln2'], in_features=x)
+    x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights['ln2'], in_features=x)
 
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
