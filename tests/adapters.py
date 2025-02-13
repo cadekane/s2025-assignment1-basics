@@ -789,7 +789,25 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    # If we're in the warmup phase
+    if it < warmup_iters:
+        # Linear interpolation from 0 to max_learning_rate
+        return (it / warmup_iters) * max_learning_rate
+    
+    # If we're past the cosine cycle
+    if it >= warmup_iters + cosine_cycle_iters:
+        return min_learning_rate
+    
+    # We're in the cosine decay phase
+    # First, get progress through cosine phase (0 to 1)
+    cosine_progress = (it - warmup_iters) / cosine_cycle_iters
+    
+    # Compute cosine factor (goes from 1 to -1)
+    cosine_factor = math.cos(math.pi * cosine_progress)
+    
+    # Scale and shift cosine to go from max_lr to min_lr
+    lr_range = max_learning_rate - min_learning_rate
+    return min_learning_rate + 0.5 * lr_range * (1 + cosine_factor)
 
 
 def run_save_checkpoint(
