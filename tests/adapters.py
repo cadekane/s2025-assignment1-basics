@@ -392,7 +392,7 @@ def run_transformer_block(
     )
 
     # Dropout
-    x2 = F.dropout(x2, residual_pdrop)
+    x2 = F.dropout(x2, residual_pdrop) # not sure where else to put this!
 
     # Add
     return x2 + x
@@ -653,12 +653,110 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
     """
     raise NotImplementedError
 
+class AdamW(torch.optim.Optimizer):
+    """Implements AdamW optimizer with weight decay fix.
+    
+    AdamW modifies Adam by decoupling weight decay from the gradient update.
+    """
+    
+    def __init__(
+        self, 
+        params, 
+        lr: float = 1e-3, 
+        betas: tuple = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0.01,
+    ):
+        """Initialize AdamW optimizer.
+        
+        Args:
+            params: iterable of parameters to optimize
+            lr: learning rate (α)
+            betas: coefficients for computing running averages (β₁, β₂)
+            eps: term added for numerical stability (ϵ)
+            weight_decay: weight decay coefficient (λ)
+        """
+        # if not 0.0 <= lr:
+        #     raise ValueError(f"Invalid learning rate: {lr}")
+        # if not 0.0 <= eps:
+        #     raise ValueError(f"Invalid epsilon value: {eps}")
+        # if not 0.0 <= betas[0] < 1.0:
+        #     raise ValueError(f"Invalid beta parameter at index 0: {betas[0]}")
+        # if not 0.0 <= betas[1] < 1.0:
+        #     raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
+        # if not 0.0 <= weight_decay:
+        #     raise ValueError(f"Invalid weight_decay value: {weight_decay}")
+            
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+        )
+        super().__init__(params, defaults)
+    
+    @torch.no_grad()
+    def step(self, closure=None):
+        """Performs a single optimization step.
+        
+        Args:
+            closure: A closure that reevaluates the model and returns the loss.
+        """
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                    
+                grad = p.grad
+                
+                # Get or initialize state
+                state = self.state[p]
+                if len(state) == 0:
+                    state['step'] = 0
+                    # Exponential moving average of gradient values
+                    state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    # Exponential moving average of squared gradient values
+                    state['exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                beta1, beta2 = group['betas']
+                
+                state['step'] += 1
+                
+                # Decay the first and second moment running average coefficient
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                
+                # Bias correction
+                bias_correction1 = 1 - beta1 ** state['step']
+                bias_correction2 = 1 - beta2 ** state['step']
+                
+                # Compute bias-corrected moment estimates
+                exp_avg_hat = exp_avg / bias_correction1
+                exp_avg_sq_hat = exp_avg_sq / bias_correction2
+                
+                # Update parameters
+                denom = exp_avg_sq_hat.sqrt().add_(group['eps'])
+                step_size = group['lr']
+                
+                # AdamW modification: apply weight decay before parameter update
+                if group['weight_decay'] != 0:
+                    p.data.mul_(1 - group['lr'] * group['weight_decay'])
+                
+                p.data.addcdiv_(exp_avg_hat, denom, value=-step_size)
+        
+        return loss
 
 def get_adamw_cls() -> Type[torch.optim.Optimizer]:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
