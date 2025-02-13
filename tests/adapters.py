@@ -611,12 +611,27 @@ def run_cross_entropy(inputs: torch.FloatTensor, targets: torch.LongTensor):
     Returns:
         Tensor of shape () with the average cross-entropy loss across examples.
     """
+    # Find max values for numerical stability
+    max_logits = torch.max(inputs, dim=1, keepdim=True)[0]
+    
+    # Subtract max from inputs (for stability)
+    shifted_logits = inputs - max_logits
+    
+    # Compute exp of shifted logits
+    exp_logits = torch.exp(shifted_logits)
+    
+    # Sum exp logits across classes
+    sum_exp_logits = torch.sum(exp_logits, dim=1, keepdim=True)
+    
+    # Compute log sum exp
+    log_sum_exp = torch.log(sum_exp_logits)
+    
     # Compute log softmax
-    log_probs = F.log_softmax(inputs, dim=1)
+    log_probs = shifted_logits - log_sum_exp
     
     # Select the log probabilities for the target classes
-    # gather() takes target indices and selects corresponding values from log_probs
-    target_log_probs = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+    batch_indices = torch.arange(inputs.shape[0])
+    target_log_probs = log_probs[batch_indices, targets]
     
     # Compute mean negative log probability
     loss = -torch.mean(target_log_probs)
