@@ -1003,147 +1003,36 @@ import os
 from collections import defaultdict, Counter
 from typing import Dict, List, Set, Tuple
 
-# def run_train_bpe(
-#     input_path: str | os.PathLike,
-#     vocab_size: int,
-#     special_tokens: list[str],
-#     **kwargs,
-# ):
-#     """Given the path to an input corpus, run train a BPE tokenizer and
-#     output its vocabulary and merges.
-
-#     Args:
-#         input_path: str | os.PathLike
-#             Path to BPE tokenizer training data.
-#         vocab_size: int
-#             Total number of items in the tokenizer's vocabulary (including special tokens).
-#         special_tokens: list[str]
-#             A list of string special tokens to be added to the tokenizer vocabulary.
-#             These strings will never be split into multiple tokens, and will always be
-#             kept as a single token. If these special tokens occur in the `input_path`,
-#             they are treated as any other string.
-
-#     Returns:
-#         Tuple of (vocab, merges):
-#             vocab: dict[int, bytes]
-#                 The trained tokenizer vocabulary, a mapping from int (token ID in the vocabulary)
-#                 to bytes (token bytes)
-#             merges: list[tuple[bytes, bytes]]
-#                 BPE merges. Each list item is a tuple of bytes (<token1>, <token2>),
-#                 representing that <token1> was merged with <token2>.
-#                 Merges are ordered by order of creation.
-#     """
-
-#     def compute_pair_freqs(splits: Dict[str, List[int]], word_freqs) -> Dict[Tuple[int, int], int]:
-#         pair_freqs = defaultdict(int)
-#         for word, freq in word_freqs.items():
-#             split = splits[word]
-#             if len(split) == 1:
-#                 continue
-#             for i in range(len(split) - 1):
-#                 pair = (split[i], split[i + 1])
-#                 pair_freqs[pair] += freq
-#         return pair_freqs
-    
-#     def merge_pair(a, b, new_index, splits, word_freqs) -> Dict[str, List[int]]:
-#         for word in word_freqs:
-#             split = splits[word]
-#             if len(split) == 1:
-#                 continue
-
-#             i = 0
-#             # Store the result in a new list
-#             new_split = []
-#             while i < len(split):
-#                 if i < len(split) - 1 and split[i] == a and split[i + 1] == b:
-#                     new_split.append(new_index)
-#                     i += 2  # Skip both tokens that were merged
-#                 else:
-#                     new_split.append(split[i])
-#                     i += 1  # Move to next token
-#             splits[word] = new_split
-
-#         return splits
-    
-#     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
-#     vocab = {
-#         x: bytes([x]) for x in range(256)
-#     }
-
-#     next_index = len(vocab) # figure out what to do with next index
-#     for special_token in special_tokens:
-#         vocab[next_index] = special_token.encode('utf-8')
-
-#     corpus = []
-#     with open(input_path, 'r') as f:
-#         for line in f:
-#             # line = f.readline()
-#             line = re.findall(PAT, line)
-#             corpus.append(line)
-
-#     word_freqs = Counter([item for sublist in corpus for item in sublist])
-
-#     splits = {word: list(map(int, word.encode('utf-8'))) for word in word_freqs.keys()}
-    
-#     merges = []
-
-#     for i in range(vocab_size):
-
-#         # Find the most common pair.
-#         best_pair = None
-#         max_freq = -1  # Start with an invalid frequency
-
-#         pair_freqs = compute_pair_freqs(splits, word_freqs)
-
-#         for pair, freq in pair_freqs.items():
-
-#             if freq > max_freq: # just finding the one with the greatest frequency
-#                 best_pair = pair
-#                 max_freq = freq 
-#             elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
-#                 # best_pair = lexicographically_greater(pair, best_pair)
-#                 best_pair = max(pair, best_pair) # apparently this is all you need to do to find the lexicographically greater pair
-
-#         print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
-
-#         # Merge that pair.
-#         new_index = len(vocab) + i # 256 + i
-#         # merges[best_pair] = new_index
-#         merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
-#         vocab[new_index] = vocab[best_pair[0]] + vocab[best_pair[1]] # assign next open int in dict to the byte combination of the best pair
-
-#         print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
-#         splits = merge_pair(*best_pair, new_index, splits, word_freqs)
-    
-#     return (vocab, merges)
-
-from transformers import AutoTokenizer
-
-import os
-from collections import defaultdict
-
-import os
-from collections import defaultdict
-
 def run_train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
     special_tokens: list[str],
+    **kwargs,
 ):
-    """
-    Train a GPT-2 Byte-Level BPE tokenizer with pre-tokenization.
+    """Given the path to an input corpus, run train a BPE tokenizer and
+    output its vocabulary and merges.
 
     Args:
-        input_path: Path to text corpus for training.
-        vocab_size: Desired vocabulary size (including special tokens).
-        special_tokens: List of special tokens (e.g., ["<|endoftext|>"]).
+        input_path: str | os.PathLike
+            Path to BPE tokenizer training data.
+        vocab_size: int
+            Total number of items in the tokenizer's vocabulary (including special tokens).
+        special_tokens: list[str]
+            A list of string special tokens to be added to the tokenizer vocabulary.
+            These strings will never be split into multiple tokens, and will always be
+            kept as a single token. If these special tokens occur in the `input_path`,
+            they are treated as any other string.
 
     Returns:
-        vocab: dict[int, bytes] - Token ID to byte mapping.
-        merges: list[tuple[bytes, bytes]] - BPE merge rules.
+        Tuple of (vocab, merges):
+            vocab: dict[int, bytes]
+                The trained tokenizer vocabulary, a mapping from int (token ID in the vocabulary)
+                to bytes (token bytes)
+            merges: list[tuple[bytes, bytes]]
+                BPE merges. Each list item is a tuple of bytes (<token1>, <token2>),
+                representing that <token1> was merged with <token2>.
+                Merges are ordered by order of creation.
     """
-
     # Read the corpus
     with open(input_path, "r", encoding="utf-8") as f:
         corpus = f.read()
@@ -1215,6 +1104,8 @@ def run_train_bpe(
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], x[0])) # same as above, but more readable
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(x[0])))
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(bytes((i,)) for i in x[0])))
+
+        # Ensure using the original byte values to compare lexicography, not the ones with the new index in the vocab!
         best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], tuple(vocab.get(i, (i,)) for i in x[0])))
         max_freq = pair_freqs[best_pair]
 
@@ -1228,6 +1119,6 @@ def run_train_bpe(
         splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
 
-        print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
+        # print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
 
     return vocab, merges
