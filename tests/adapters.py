@@ -1039,6 +1039,14 @@ def run_train_bpe(
     
     merges = []
 
+    def lexico_greater(pair, best_pair):
+        if pair[0] > best_pair[0]:
+            return pair
+        elif pair[0] == best_pair[0]:
+            if pair[1] > best_pair[1]:
+            return pair
+        return best_pair
+
     for i in range(vocab_size):
 
         # Find the most common pair.
@@ -1049,18 +1057,21 @@ def run_train_bpe(
 
         for pair, freq in pair_freqs.items():
 
-            current_bytes = vocab[pair[0]] + vocab[pair[1]]
-            best_bytes = vocab[best_pair[0]] + vocab[best_pair[1]] if best_pair else None
+            # current_bytes = vocab[pair[0]] + vocab[pair[1]]
+            # best_bytes = vocab[best_pair[0]] + vocab[best_pair[1]] if best_pair else None
 
-            if (best_pair is None or 
-                freq > max_freq or 
-                (freq == max_freq and current_bytes < best_bytes)):
-                best_pair = pair
-                max_freq = freq
-
-            # if freq > max_freq or (freq == max_freq and pair < best_pair): # IDK if this lexicographical thing is correct
+            # if (best_pair is None or 
+            #     freq > max_freq or 
+            #     (freq == max_freq and current_bytes < best_bytes)):
             #     best_pair = pair
-            #     max_freq = freq # not necessary I don't think.
+            #     max_freq = freq
+
+            if freq > max_freq: # just finding the one with the greatest frequency
+                best_pair = pair
+                max_freq = freq 
+            elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
+                best_pair = lexico_greater(pair, best_pair)
+
         print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
 
         # Merge that pair.
