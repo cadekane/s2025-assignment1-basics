@@ -1217,7 +1217,7 @@ def run_train_bpe(
         best_pair = None
         max_freq = -1  # Start with an invalid frequency
 
-        pair_freqs = compute_pair_freqs(splits, word_freqs)
+        pair_freqs = compute_pair_freqs(splits)
 
         for pair, freq in pair_freqs.items():
 
