@@ -1040,6 +1040,9 @@ def run_train_bpe(
     merges = []
 
     def lexico_greater(pair, best_pair):
+
+        if best_pair is None:
+            return pair
         if pair[0] > best_pair[0]:
             return pair
         elif pair[0] == best_pair[0]:
@@ -1056,15 +1059,6 @@ def run_train_bpe(
         pair_freqs = compute_pair_freqs(splits, word_freqs)
 
         for pair, freq in pair_freqs.items():
-
-            # current_bytes = vocab[pair[0]] + vocab[pair[1]]
-            # best_bytes = vocab[best_pair[0]] + vocab[best_pair[1]] if best_pair else None
-
-            # if (best_pair is None or 
-            #     freq > max_freq or 
-            #     (freq == max_freq and current_bytes < best_bytes)):
-            #     best_pair = pair
-            #     max_freq = freq
 
             if freq > max_freq: # just finding the one with the greatest frequency
                 best_pair = pair
