@@ -1050,6 +1050,21 @@ def run_train_bpe(
                 return pair
         return best_pair
 
+    def lexicographically_greater(pair1, pair2):
+        """
+        Compares two pairs lexicographically and returns the greater one.
+        
+        Args:
+            pair1 (tuple): First pair of tokens (e.g., ('A', 'B')).
+            pair2 (tuple): Second pair of tokens (e.g., ('B', 'ZZ')).
+        
+        Returns:
+            tuple: The lexicographically greater pair.
+        """
+        if pair1 > pair2:
+            return pair1
+        return pair2
+
     for i in range(vocab_size):
 
         # Find the most common pair.
@@ -1064,7 +1079,14 @@ def run_train_bpe(
                 best_pair = pair
                 max_freq = freq 
             elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
-                best_pair = lexico_greater(pair, best_pair)
+                # best_pair = lexicographically_greater(pair, best_pair)
+                if pair[0] > best_pair[0]:
+                    best_pair = pair
+                    max_freq = freq
+                elif pair[0] == best_pair[0]:
+                    if pair[1] > best_pair[1]:
+                        best_pair = pair
+                        max_freq = freq
 
         print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
 
