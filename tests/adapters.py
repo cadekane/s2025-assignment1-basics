@@ -1048,7 +1048,7 @@ def run_train_bpe(
         pair_freqs = compute_pair_freqs(splits, word_freqs)
 
         for pair, freq in pair_freqs.items():
-            if freq > max_freq or (freq == max_freq and pair > best_pair): # IDK if this lexicographical thing is correct
+            if freq > max_freq or (freq == max_freq and pair < best_pair): # IDK if this lexicographical thing is correct
                 best_pair = pair
                 max_freq = freq # not necessary I don't think.
         print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
