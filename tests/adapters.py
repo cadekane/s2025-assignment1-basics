@@ -1214,7 +1214,8 @@ def run_train_bpe(
 
         # Add new token to vocabulary
         vocab[next_index] = new_token
-        merges.append(best_pair)
+        # merges.append(best_pair)
+        merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
 
         # Apply merge to splits
         splits = merge_pair(*best_pair, splits)
