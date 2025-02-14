@@ -900,8 +900,6 @@ def run_save_checkpoint(
     
     torch.save(checkpoint, out)
 
-    raise NotImplementedError
-
 
 def run_load_checkpoint(
     src: str | os.PathLike | BinaryIO | IO[bytes],
