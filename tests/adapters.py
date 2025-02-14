@@ -1044,7 +1044,7 @@ def run_train_bpe(
             return pair
         elif pair[0] == best_pair[0]:
             if pair[1] > best_pair[1]:
-            return pair
+                return pair
         return best_pair
 
     for i in range(vocab_size):
