@@ -1214,12 +1214,12 @@ def run_train_bpe(
         # new_token = best_pair[0] + best_pair[1]
 
         # Find the most common pair.
-        best_pair = None
-        max_freq = -1  # Start with an invalid frequency
+        # best_pair = None
 
         pair_freqs = compute_pair_freqs(splits)
-        print(pair_freqs)
 
+        best_pair = max(pair_freqs, key=pair_freqs.get)
+        max_freq = pair_freqs[best_pair]
 
         # for pair, freq in pair_freqs.items():
 
@@ -1240,6 +1240,6 @@ def run_train_bpe(
         splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
 
-        # print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
+        print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
 
     return vocab, merges
