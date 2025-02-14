@@ -1001,19 +1001,39 @@ def run_train_bpe(
                 pair_freqs[pair] += freq
         return pair_freqs
 
-    def merge_pair(a, b, new_index, splits, word_freqs) -> Dict[str, List[int]]: 
+    # def merge_pair(a, b, new_index, splits, word_freqs) -> Dict[str, List[int]]: 
+    #     for word in word_freqs:
+    #         split = splits[word]
+    #         if len(split) == 1:
+    #             continue
+
+    #         i = 0
+    #         while i < len(split) - 1:
+    #             if split[i] == a and split[i + 1] == b:
+    #                 split = split[:i] + [new_index] + split[i + 2 :] # replace the pair with just the one new int that represents that combination in the vocab
+    #             else:
+    #                 i += 1
+    #         splits[word] = split
+    #     return splits
+    
+    def merge_pair(a, b, new_index, splits, word_freqs) -> Dict[str, List[int]]:
         for word in word_freqs:
             split = splits[word]
             if len(split) == 1:
                 continue
 
             i = 0
-            while i < len(split) - 1:
-                if split[i] == a and split[i + 1] == b:
-                    split = split[:i] + [new_index] + split[i + 2 :] # replace the pair with just the one new int that represents that combination in the vocab
+            # Store the result in a new list
+            new_split = []
+            while i < len(split):
+                if i < len(split) - 1 and split[i] == a and split[i + 1] == b:
+                    new_split.append(new_index)
+                    i += 2  # Skip both tokens that were merged
                 else:
-                    i += 1
-            splits[word] = split
+                    new_split.append(split[i])
+                    i += 1  # Move to next token
+            splits[word] = new_split
+
         return splits
     
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
