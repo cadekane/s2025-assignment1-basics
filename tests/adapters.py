@@ -1170,6 +1170,7 @@ def run_train_bpe(
     # Step 5: Prepare to track byte pair merges
     merges = []
     splits = {word: list(word) for word in word_freqs.keys()}  # Each word is a list of byte values
+    print(splits)
 
     def compute_pair_freqs(splits):
         """Compute the frequency of adjacent byte pairs."""
