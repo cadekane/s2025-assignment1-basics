@@ -1157,6 +1157,7 @@ def run_train_bpe(
     for word in words:
         word_bytes = tuple(word.encode("utf-8"))  # Store as tuple (immutable)
         word_freqs[word_bytes] += 1
+    print(word_freqs)
 
     # Step 3: Initialize vocabulary with raw bytes (0-255)
     vocab = {i: bytes([i]) for i in range(256)}
