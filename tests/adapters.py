@@ -569,6 +569,7 @@ def run_gelu(in_features: torch.FloatTensor) -> torch.FloatTensor:
     return F.gelu(in_features)
     # raise NotImplementedError
 
+import numpy as np
 
 def run_get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str
