@@ -1184,23 +1184,22 @@ def run_train_bpe(
                 pair = (split[i], split[i + 1])
                 pair_freqs[pair] += freq
         return pair_freqs
-
-    def merge_pair(a, b, splits):
-        """Merge the most frequent byte pair (a, b) into a single token."""
+    
+    def merge_pair(a, b, new_index, splits) -> Dict[str, List[int]]:
         for word in word_freqs:
             split = splits[word]
-            if len(split) < 2:
+            if len(split) == 1:
                 continue
 
-            new_split = []
             i = 0
+            new_split = []
             while i < len(split):
                 if i < len(split) - 1 and split[i] == a and split[i + 1] == b:
-                    new_split.append(a + b)  # Merge into a single token
-                    i += 2  # Skip next byte (since it's merged)
+                    new_split.append(new_index)
+                    i += 2  # Skip both tokens that were merged
                 else:
                     new_split.append(split[i])
-                    i += 1
+                    i += 1  # Move to next token
             splits[word] = new_split
         return splits
 
@@ -1210,17 +1209,44 @@ def run_train_bpe(
         if not pair_freqs:
             break
 
-        # Find most frequent byte pair
-        best_pair = max(pair_freqs, key=pair_freqs.get)
-        new_token = best_pair[0] + best_pair[1]
+        # # Find most frequent byte pair
+        # best_pair = max(pair_freqs, key=pair_freqs.get)
+        # new_token = best_pair[0] + best_pair[1]
+
+        # Find the most common pair.
+        best_pair = None
+        max_freq = -1  # Start with an invalid frequency
+
+        pair_freqs = compute_pair_freqs(splits, word_freqs)
+
+        for pair, freq in pair_freqs.items():
+
+            if freq > max_freq: # just finding the one with the greatest frequency
+                best_pair = pair
+                max_freq = freq 
+            elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
+                # best_pair = lexicographically_greater(pair, best_pair)
+                best_pair = max(pair, best_pair) # apparently this is all you need to do to find the lexicographically greater pair
 
         # Add new token to vocabulary
+        new_token = vocab[best_pair[0]] + vocab[best_pair[1]]
         vocab[next_index] = new_token
         # merges.append(best_pair)
         merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
 
         # Apply merge to splits
-        splits = merge_pair(*best_pair, splits)
+        splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
+
+        print(f"Merged {vocab[best_pair[0]]} + {vocab[best_pair[1]]} -> {new_token}")
+
+        # Merge that pair.
+#         new_index = len(vocab) + i # 256 + i
+#         # merges[best_pair] = new_index
+#         merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
+#         vocab[new_index] = vocab[best_pair[0]] + vocab[best_pair[1]] # assign next open int in dict to the byte combination of the best pair
+
+#         print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
+#         splits = merge_pair(*best_pair, new_index, splits, word_freqs)
 
     return vocab, merges
