@@ -1148,7 +1148,7 @@ def run_train_bpe(
     with open(input_path, "r", encoding="utf-8") as f:
         corpus = f.read()
 
-    # Step 1: Pre-tokenize words (simple whitespace split)
+    # Step 1: Pre-tokenize words using a regex pattern
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     words = re.findall(PAT, corpus)
 
@@ -1209,26 +1209,11 @@ def run_train_bpe(
         if not pair_freqs:
             break
 
-        # # Find most frequent byte pair
-        # best_pair = max(pair_freqs, key=pair_freqs.get)
-        # new_token = best_pair[0] + best_pair[1]
-
-        # Find the most common pair.
-        # best_pair = None
-
         pair_freqs = compute_pair_freqs(splits)
 
-        best_pair = max(pair_freqs, key=pair_freqs.get)
+        # best_pair = (max(pair_freqs.items(), key=lambda x: x[1]))[0]
+        best_pair, _ = max(pair_freqs.items(), key=lambda x: x[1]) # same as above, but more readable
         max_freq = pair_freqs[best_pair]
-
-        # for pair, freq in pair_freqs.items():
-
-        #     if freq > max_freq: # just finding the one with the greatest frequency
-        #         best_pair = pair
-        #         max_freq = freq 
-        #     elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
-        #         # best_pair = lexicographically_greater(pair, best_pair)
-        #         best_pair = max(pair, best_pair) # apparently this is all you need to do to find the lexicographically greater pair
 
         # Add new token to vocabulary
         new_token = vocab[best_pair[0]] + vocab[best_pair[1]]
