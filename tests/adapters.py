@@ -524,36 +524,48 @@ def run_transformer_lm(
         FloatTensor of shape (batch size, sequence_length, vocab_size) with the predicted unnormalized
         next-word distribution for each token.
     """
-    # this is just wrong for some reason…
-    batch_size, sequence_length = in_indices.shape
-    assert sequence_length <= context_length
+    batch_size, seq_len = in_indices.shape
+    assert seq_len <= context_length, "Input sequence is longer than the model's context length."
 
-    # Token embeddings
-    token_embeddings = F.embedding(in_indices, weights["token_embeddings.weight"])
+    # 1. Token Embeddings
+    token_emb = F.embedding(in_indices, weights["token_embeddings.weight"])  # (batch, seq_len, d_model)
 
-    # Positional embeddings
-    position_ids = torch.arange(sequence_length, device=in_indices.device)
-    position_embeddings = weights["position_embeddings.weight"][position_ids]
+    # 2. Positional Embeddings
+    pos_indices = torch.arange(seq_len, device=in_indices.device)
+    pos_emb = F.embedding(pos_indices, weights["position_embeddings.weight"])  # (seq_len, d_model)
 
-    # Add token and position embeddings, apply dropout
-    x = token_embeddings + position_embeddings
-    x = F.dropout(x, residual_pdrop, training=True)
+    # Add token + positional embeddings and apply dropout
+    x = token_emb + pos_emb
+    x = F.dropout(x, residual_pdrop)
 
-    # Run transformer blocks
-    for layer in range(num_layers):
-        layer_weights = {key.split(f"layers.{layer}.")[1]: value for key, value in weights.items() if key.startswith(f"layers.{layer}.")}
-        x = run_transformer_block(d_model, num_heads, d_ff, attn_pdrop, residual_pdrop, layer_weights, x)
+    # 3. Transformer Blocks
+    for i in range(num_layers):
+        x = run_transformer_block(
+            d_model=d_model,
+            num_heads=num_heads,
+            d_ff=d_ff,
+            attn_pdrop=attn_pdrop,
+            residual_pdrop=residual_pdrop,
+            weights={
+                "attn.q_proj.weight": weights[f"layers.{i}.attn.q_proj.weight"],
+                "attn.k_proj.weight": weights[f"layers.{i}.attn.k_proj.weight"],
+                "attn.v_proj.weight": weights[f"layers.{i}.attn.v_proj.weight"],
+                "attn.output_proj.weight": weights[f"layers.{i}.attn.output_proj.weight"],
+                "ln1.weight": weights[f"layers.{i}.ln1.weight"],
+                "ffn.w1.weight": weights[f"layers.{i}.ffn.w1.weight"],
+                "ffn.w2.weight": weights[f"layers.{i}.ffn.w2.weight"],
+                "ln2.weight": weights[f"layers.{i}.ln2.weight"],
+            },
+            in_features=x
+        )
 
-    # Final layer normalization
-    x = F.layer_norm(x, (d_model,), weights["ln_final.weight"], eps=1e-5)
+    # 4. Final Layer Normalization
+    x = run_rmsnorm(d_model, 1e-5, {"weight": weights["ln_final.weight"]}, x)
 
-    # Language model head, Linear
-    logits = torch.matmul(x, weights["lm_head.weight"].T)
+    # 5. LM Head Projection
+    logits = F.linear(x, weights["lm_head.weight"])  # (batch, seq_len, vocab_size)
 
-    # Softmax function to get probabilities
-    probabilities = F.softmax(logits, dim=-1)
-
-    return probabilities
+    return logits  # No softmax (let's keep logits for efficiency)
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, weight: torch.FloatTensor = None):
