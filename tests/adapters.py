@@ -344,31 +344,42 @@ def run_transformer_block(
         FloatTensor of shape (batch_size, sequence_length, d_model) with the output of
         running the Transformer block on the input features.
     """
-    def reformat_attention_weights(weights: dict, num_heads: int, d_model: int) -> dict:
-        """Reformat attention weights from the provided format into the format expected by run_multihead_self_attention."""
-        
-        # Calculate dimensions
-        d_head = d_model // num_heads  # dimension per head
-        
-        # Get the concatenated weights
-        q_weights = weights["attn.q_proj.weight"]  # Shape: (num_heads * d_head, d_model)
-        k_weights = weights["attn.k_proj.weight"]
-        v_weights = weights["attn.v_proj.weight"]
-        output_weights = weights["attn.output_proj.weight"]
-        
-        # Reshape the weights into per-head format
-        # From: (num_heads * d_head, d_model)
-        # To: (num_heads, d_head, d_model)
-        q_weights = q_weights.view(num_heads, d_head, d_model)
-        k_weights = k_weights.view(num_heads, d_head, d_model)
-        v_weights = v_weights.view(num_heads, d_head, d_model)
-        
-        return {
-            "q": q_weights,  # Shape: (num_heads, d_head, d_model)
-            "k": k_weights,  # Shape: (num_heads, d_head, d_model)
-            "v": v_weights,  # Shape: (num_heads, d_head, d_model)
-            "output": output_weights  # Shape: (d_model, d_model)
-    }
+    def convert_transformer_weights(attn_q_proj, attn_k_proj, attn_v_proj, attn_out_proj, num_heads, d_model):
+        """
+        Converts concatenated transformer block weights into a dictionary format
+        suitable for MultiHeadSelfAttention.
+
+        Args:
+            attn_q_proj (torch.Tensor): Query projection weights (num_heads * d_k, d_model).
+            attn_k_proj (torch.Tensor): Key projection weights (num_heads * d_k, d_model).
+            attn_v_proj (torch.Tensor): Value projection weights (num_heads * d_v, d_model).
+            attn_out_proj (torch.Tensor): Output projection weights (d_model, d_v * num_heads).
+            num_heads (int): Number of attention heads.
+            d_model (int): Model dimension.
+
+        Returns:
+            dict[str, torch.FloatTensor]: Reformatted dictionary with per-head weights.
+        """
+
+        d_k = d_model // num_heads  # Dimension of each head's query/key
+        d_v = d_model // num_heads  # Dimension of each head's value (assuming same as d_k)
+
+        weights = {}
+
+        # Split concatenated Q, K, V projection weights into individual heads
+        q_splits = torch.chunk(attn_q_proj, num_heads, dim=0)
+        k_splits = torch.chunk(attn_k_proj, num_heads, dim=0)
+        v_splits = torch.chunk(attn_v_proj, num_heads, dim=0)
+
+        for i in range(num_heads):
+            weights[f"q_heads.{i}.weight"] = q_splits[i]  # Shape (d_k, d_model)
+            weights[f"k_heads.{i}.weight"] = k_splits[i]  # Shape (d_k, d_model)
+            weights[f"v_heads.{i}.weight"] = v_splits[i]  # Shape (d_v, d_model)
+
+        # Include the output projection weight
+        weights["output_proj.weight"] = attn_out_proj  # Shape (d_model, d_v * num_heads)
+
+        return weights
 
     # the weights are extremely confusing, I don't know how to use them
     new_weights = {
@@ -384,7 +395,12 @@ def run_transformer_block(
     x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights["ln1"], in_features=in_features)
 
     # Multi-head Self-Attention
-    attention_weights = reformat_attention_weights(weights, num_heads, d_model)
+    attention_weights = convert_transformer_weights(weights['attn.q_proj.weight'],
+                                                    weights['attn.k_proj.weight'],
+                                                    weights['attn.v_proj.weight'],
+                                                    weights['attn.output_proj.weight'],
+                                                    num_heads,
+                                                    d_model)
     x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
@@ -402,7 +418,7 @@ def run_transformer_block(
     ffn_weights = {
         "w1": weights["ffn.w1.weight"],
         "w2": weights["ffn.w2.weight"]
-    } 
+    }
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
         d_model=d_model,
