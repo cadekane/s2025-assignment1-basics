@@ -344,7 +344,6 @@ def run_transformer_block(
         FloatTensor of shape (batch_size, sequence_length, d_model) with the output of
         running the Transformer block on the input features.
     """
-    
     def reformat_attention_weights(weights: dict, num_heads: int, d_model: int) -> dict:
         """Reformat attention weights from the provided format into the format expected by run_multihead_self_attention."""
         
@@ -386,7 +385,6 @@ def run_transformer_block(
 
     # Multi-head Self-Attention
     attention_weights = reformat_attention_weights(weights, num_heads, d_model)
-    
     x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
