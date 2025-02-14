@@ -1238,7 +1238,8 @@ def run_train_bpe(
         splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
 
-        print(f"Merged {vocab[best_pair[0]]} + {vocab[best_pair[1]]} -> {new_token}")
+        print(f"Most common pair: {best_pair} (Frequency: {max_freq})")
+        # print(f"Merged {vocab[best_pair[0]]} + {vocab[best_pair[1]]} -> {new_token}")
 
         # Merge that pair.
 #         new_index = len(vocab) + i # 256 + i
