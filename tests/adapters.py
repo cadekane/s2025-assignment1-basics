@@ -416,8 +416,8 @@ def run_transformer_block(
     x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights['ln2'], in_features=x)
 
     ffn_weights = {
-        "w1": weights["ffn.w1.weight"],
-        "w2": weights["ffn.w2.weight"]
+        "w1.weight": weights["ffn.w1.weight"],
+        "w2.weight": weights["ffn.w2.weight"]
     }
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
