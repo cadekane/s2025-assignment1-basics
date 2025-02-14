@@ -344,22 +344,37 @@ def run_transformer_block(
         FloatTensor of shape (batch_size, sequence_length, d_model) with the output of
         running the Transformer block on the input features.
     """
+    def reformat_attention_weights(weights: dict, num_heads: int, d_model: int) -> dict:
+        """Reformat attention weights from the provided format into the format expected by run_multihead_self_attention."""
+        
+        # Calculate dimensions
+        d_head = d_model // num_heads  # dimension per head
+        
+        # Get the concatenated weights
+        q_weights = weights["attn.q_proj.weight"]  # Shape: (num_heads * d_head, d_model)
+        k_weights = weights["attn.k_proj.weight"]
+        v_weights = weights["attn.v_proj.weight"]
+        output_weights = weights["attn.output_proj.weight"]
+        
+        # Reshape the weights into per-head format
+        # From: (num_heads * d_head, d_model)
+        # To: (num_heads, d_head, d_model)
+        q_weights = q_weights.view(num_heads, d_head, d_model)
+        k_weights = k_weights.view(num_heads, d_head, d_model)
+        v_weights = v_weights.view(num_heads, d_head, d_model)
+        
+        return {
+            "q": q_weights,  # Shape: (num_heads, d_head, d_model)
+            "k": k_weights,  # Shape: (num_heads, d_head, d_model)
+            "v": v_weights,  # Shape: (num_heads, d_head, d_model)
+            "output": output_weights  # Shape: (d_model, d_model)
+    }
 
     # the weights are extremely confusing, I don't know how to use them
     new_weights = {
         "ln1": {
             "weight": weights["ln1.weight"],
         },
-        # "attn": {
-        #     "q": weights["attn.q_proj.weight"],
-        #     "k": weights["attn.k_proj.weight"],
-        #     "v": weights["attn.v_proj.weight"],
-        #     "output": weights["attn.output_proj.weight"],
-        # },
-        # "ffn": {
-        #     "w1": weights["ffn.w1.weight"],
-        #     "w2": weights["ffn.w2.weight"],
-        # },
         "ln2": {
             "weight": weights["ln2.weight"],
         },
@@ -369,11 +384,12 @@ def run_transformer_block(
     x = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights["ln1"], in_features=in_features)
 
     # Multi-head Self-Attention
+    attention_weights = reformat_attention_weights(weights, num_heads, d_model)
     x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
         attn_pdrop=attn_pdrop,
-        weights=reformat_attention_weights(weights, num_heads, d_model), # ?????
+        weights=attention_weights,
         in_features=x
     )
 
@@ -383,11 +399,15 @@ def run_transformer_block(
     # RMSNorm 2
     x2 = run_rmsnorm(d_model=d_model, eps=1e-5, weights=new_weights['ln2'], in_features=x)
 
+    ffn_weights = {
+        "w1": weights["ffn.w1.weight"],
+        "w2": weights["ffn.w2.weight"]
+    } 
     # Positionwise Feedforward
     x2 = run_positionwise_feedforward(
         d_model=d_model,
         d_ff=d_ff,
-        weights=weights["ffn"],
+        weights=ffn_weights,
         in_features=x2
     )
 
@@ -549,6 +569,7 @@ def run_gelu(in_features: torch.FloatTensor) -> torch.FloatTensor:
     return F.gelu(in_features)
     # raise NotImplementedError
 
+import numpy as np
 
 def run_get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str
@@ -574,7 +595,28 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    # Get the total length of the dataset
+    data_length = len(dataset)
+    
+    # We need context_length + 1 tokens for each sequence (context + next token)
+    # So we can only start from indices that leave enough room
+    max_start_idx = data_length - context_length - 1
+    
+    # Randomly sample batch_size starting indices
+    start_indices = np.random.randint(0, max_start_idx + 1, size=batch_size)
+    
+    # Create empty tensors to store our sequences
+    x = torch.zeros((batch_size, context_length), dtype=torch.long, device=device)
+    y = torch.zeros((batch_size, context_length), dtype=torch.long, device=device)
+    
+    # Fill in the sequences
+    for b, start_idx in enumerate(start_indices):
+        # Input sequence: tokens[i:i+context_length]
+        x[b] = torch.from_numpy(dataset[start_idx:start_idx + context_length])
+        # Target sequence: tokens[i+1:i+1+context_length]
+        y[b] = torch.from_numpy(dataset[start_idx + 1:start_idx + 1 + context_length])
+    
+    return x, y
 
 
 def run_softmax(in_features: torch.FloatTensor, dim: int) -> torch.FloatTensor:
