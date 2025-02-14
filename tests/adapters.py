@@ -386,6 +386,7 @@ def run_transformer_block(
 
     # Multi-head Self-Attention
     attention_weights = reformat_attention_weights(weights, num_heads, d_model)
+    
     x = run_multihead_self_attention(
         d_model=d_model,
         num_heads=num_heads,
@@ -595,7 +596,28 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    # Get the total length of the dataset
+    data_length = len(dataset)
+    
+    # We need context_length + 1 tokens for each sequence (context + next token)
+    # So we can only start from indices that leave enough room
+    max_start_idx = data_length - context_length - 1
+    
+    # Randomly sample batch_size starting indices
+    start_indices = np.random.randint(0, max_start_idx + 1, size=batch_size)
+    
+    # Create empty tensors to store our sequences
+    x = torch.zeros((batch_size, context_length), dtype=torch.long, device=device)
+    y = torch.zeros((batch_size, context_length), dtype=torch.long, device=device)
+    
+    # Fill in the sequences
+    for b, start_idx in enumerate(start_indices):
+        # Input sequence: tokens[i:i+context_length]
+        x[b] = torch.from_numpy(dataset[start_idx:start_idx + context_length])
+        # Target sequence: tokens[i+1:i+1+context_length]
+        y[b] = torch.from_numpy(dataset[start_idx + 1:start_idx + 1 + context_length])
+    
+    return x, y
 
 
 def run_softmax(in_features: torch.FloatTensor, dim: int) -> torch.FloatTensor:
