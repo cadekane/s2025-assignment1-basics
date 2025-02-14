@@ -524,7 +524,24 @@ def run_transformer_lm(
         FloatTensor of shape (batch size, sequence_length, vocab_size) with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    batch_size, sequence_length = in_indices.shape
+    assert sequence_length <= context_length
+
+    token_embeddings = F.embedding(in_indices, weights["token_embeddings.weight"])
+
+    position_ids = torch.arange(sequence_length, device=in_indices.device)
+    position_embeddings = weights["position_embeddings.weight"][position_ids]
+
+    x = token_embeddings + position_embeddings
+    x = F.dropout(x, residual_pdrop, training=True)
+
+    for layer in range(num_layers):
+        layer_weights = {key.split(f"layers.{layer}.")[1]: value for key, value in weights.items() if key.startswith(f"layers.{layer}.")}
+        x = run_transformer_block(d_model, num_heads, d_ff, attn_pdrop, residual_pdrop, layer_weights, x)
+        
+    x = F.layer_norm(x, (d_model,), weights["ln_final.weight"], eps=1e-5)
+    logits = torch.matmul(x, weights["lm_head.weight"].T)
+    return logits
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, weight: torch.FloatTensor = None):
