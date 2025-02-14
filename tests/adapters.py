@@ -1212,10 +1212,11 @@ def run_train_bpe(
         pair_freqs = compute_pair_freqs(splits)
         print(pair_freqs)
 
-        best_pair = (max(pair_freqs.items(), key=lambda x: x[1]))[0]
-        # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], splits[x[0]])) # same as above, but more readable
+        # best_pair = (max(pair_freqs.items(), key=lambda x: x[1]))[0]
+        # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], x[0])) # same as above, but more readable
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(x[0])))
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(bytes((i,)) for i in x[0])))
+        best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], tuple(vocab.get(i, (i,)) for i in x[0])))
         max_freq = pair_freqs[best_pair]
 
         # Add new token to vocabulary
