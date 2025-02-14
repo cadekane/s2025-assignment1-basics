@@ -1210,7 +1210,6 @@ def run_train_bpe(
             break
 
         pair_freqs = compute_pair_freqs(splits)
-        print(pair_freqs)
 
         # best_pair = (max(pair_freqs.items(), key=lambda x: x[1]))[0]
         # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], x[0])) # same as above, but more readable
