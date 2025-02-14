@@ -1218,15 +1218,17 @@ def run_train_bpe(
         max_freq = -1  # Start with an invalid frequency
 
         pair_freqs = compute_pair_freqs(splits)
+        print(pair_freqs)
 
-        for pair, freq in pair_freqs.items():
 
-            if freq > max_freq: # just finding the one with the greatest frequency
-                best_pair = pair
-                max_freq = freq 
-            elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
-                # best_pair = lexicographically_greater(pair, best_pair)
-                best_pair = max(pair, best_pair) # apparently this is all you need to do to find the lexicographically greater pair
+        # for pair, freq in pair_freqs.items():
+
+        #     if freq > max_freq: # just finding the one with the greatest frequency
+        #         best_pair = pair
+        #         max_freq = freq 
+        #     elif freq == max_freq: # if there is a tie, we find the lexicographically greater pair
+        #         # best_pair = lexicographically_greater(pair, best_pair)
+        #         best_pair = max(pair, best_pair) # apparently this is all you need to do to find the lexicographically greater pair
 
         # Add new token to vocabulary
         new_token = vocab[best_pair[0]] + vocab[best_pair[1]]
@@ -1238,16 +1240,6 @@ def run_train_bpe(
         splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
 
-        print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
-        # print(f"Merged {vocab[best_pair[0]]} + {vocab[best_pair[1]]} -> {new_token}")
-
-        # Merge that pair.
-#         new_index = len(vocab) + i # 256 + i
-#         # merges[best_pair] = new_index
-#         merges.append((vocab[best_pair[0]], vocab[best_pair[1]]))
-#         vocab[new_index] = vocab[best_pair[0]] + vocab[best_pair[1]] # assign next open int in dict to the byte combination of the best pair
-
-#         print(f"Merge {vocab[best_pair[0]]} {vocab[best_pair[1]]} -> {vocab[new_index]}")
-#         splits = merge_pair(*best_pair, new_index, splits, word_freqs)
+        # print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
 
     return vocab, merges
