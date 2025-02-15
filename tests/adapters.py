@@ -1050,19 +1050,19 @@ def run_train_bpe(
     # Step 1: Pre-tokenize words using a regex pattern
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-    # Step 2: Process corpus in chunks
-    with open(input_path, "r", encoding="utf-8") as f:
-        while chunk := f.read(chunk_size):
-            words = re.findall(PAT, chunk)  # Tokenize words
-            for word in words:
-                word_bytes = tuple(word.encode("utf-8"))
-                word_freqs[word_bytes] += 1
+    # # Step 2: Process corpus in chunks
+    # with open(input_path, "r", encoding="utf-8") as f:
+    #     while chunk := f.read(chunk_size):
+    #         words = re.findall(PAT, chunk)  # Tokenize words
+    #         for word in words:
+    #             word_bytes = tuple(word.encode("utf-8"))
+    #             word_freqs[word_bytes] += 1
 
     # Read the corpus
-    # with open(input_path, "r", encoding="utf-8") as f:
-    #     corpus = f.read()
+    with open(input_path, "r", encoding="utf-8") as f:
+        corpus = f.read()
     
-    # words = re.findall(PAT, corpus)
+    words = re.findall(PAT, corpus)
 
     # Step 2: Convert words into byte sequences & count word frequencies
     word_freqs = defaultdict(int)
