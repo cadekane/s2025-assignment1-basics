@@ -1110,11 +1110,6 @@ def run_train_bpe(
         if not pair_freqs:
             break
 
-        # best_pair = (max(pair_freqs.items(), key=lambda x: x[1]))[0]
-        # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], x[0])) # same as above, but more readable
-        # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(x[0])))
-        # best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], b''.join(bytes((i,)) for i in x[0])))
-
         # Ensure using the original byte values to compare lexicography, not the ones with the new index in the vocab!
         best_pair, _ = max(pair_freqs.items(), key=lambda x: (x[1], tuple(vocab.get(i, (i,)) for i in x[0])))
         max_freq = pair_freqs[best_pair]
@@ -1128,7 +1123,5 @@ def run_train_bpe(
         # Apply merge to splits
         splits = merge_pair(*best_pair, next_index, splits)
         next_index += 1
-
-        # print(f"Most common pair: {vocab[best_pair[0]], vocab[best_pair[1]]} (Frequency: {max_freq})")
 
     return vocab, merges

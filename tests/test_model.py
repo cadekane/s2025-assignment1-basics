@@ -14,7 +14,6 @@ from .adapters import (
 )
 from .common import FIXTURES_PATH
 
-
 def test_positionwise_feedforward():
     reference_weights = torch.load(
         FIXTURES_PATH / "positionwise_feedforward_weights.pt"
