@@ -1045,23 +1045,12 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-
-    chunk_size = 100_000
-    # Step 1: Pre-tokenize words using a regex pattern
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
-    # # Step 2: Process corpus in chunks
-    # with open(input_path, "r", encoding="utf-8") as f:
-    #     while chunk := f.read(chunk_size):
-    #         words = re.findall(PAT, chunk)  # Tokenize words
-    #         for word in words:
-    #             word_bytes = tuple(word.encode("utf-8"))
-    #             word_freqs[word_bytes] += 1
-
     # Read the corpus
     with open(input_path, "r", encoding="utf-8") as f:
         corpus = f.read()
-    
+
+    # Step 1: Pre-tokenize words using a regex pattern
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     words = re.findall(PAT, corpus)
 
     # Step 2: Convert words into byte sequences & count word frequencies
@@ -1136,9 +1125,3 @@ def run_train_bpe(
         next_index += 1
 
     return vocab, merges
-
-import os
-import re
-import pickle
-from collections import defaultdict
-from typing import Dict, List, Tuple
