@@ -986,6 +986,109 @@ def run_load_checkpoint(
     return checkpoint['iteration']
 
 
+from typing import Dict, List, Tuple, Iterable, Iterator
+import json
+
+class BPETokenizer:
+    def __init__(self, vocab: Dict[int, bytes], merges: List[Tuple[bytes, bytes]], special_tokens: List[str] = None):
+        self.vocab = vocab
+        self.merges = merges
+        
+        # Create reverse vocabulary for encoding
+        self.reverse_vocab = {bytes(v): k for k, v in vocab.items()}
+        
+        # Add special tokens if provided
+        if special_tokens:
+            for token in special_tokens:
+                if token.encode() not in self.reverse_vocab:
+                    new_id = max(self.vocab.keys()) + 1
+                    self.vocab[new_id] = token.encode()
+                    self.reverse_vocab[token.encode()] = new_id
+
+    @classmethod
+    def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: List[str] = None):
+        """Construct tokenizer from vocabulary and merges files."""
+        # Load vocabulary
+        with open(vocab_filepath, 'r') as f:
+            vocab_data = json.load(f)
+            # Convert string keys to integers and string values to bytes
+            vocab = {int(k): v.encode() for k, v in vocab_data.items()}
+        
+        # Load merges
+        with open(merges_filepath, 'r') as f:
+            merges_data = json.load(f)
+            # Convert merge pairs to bytes
+            merges = [(p1.encode(), p2.encode()) for p1, p2 in merges_data]
+        
+        return cls(vocab, merges, special_tokens)
+
+    def _apply_merges(self, bytes_sequence: bytes) -> bytes:
+        """Apply BPE merges to a sequence of bytes."""
+        # Convert bytes to list of individual bytes for merging
+        parts = [bytes([b]) for b in bytes_sequence]
+        
+        while True:
+            # Find all possible merge pairs in current sequence
+            pairs = [(parts[i], parts[i + 1]) for i in range(len(parts) - 1)]
+            if not pairs:
+                break
+                
+            # Find first merge rule that can be applied
+            for first, second in self.merges:
+                for i, pair in enumerate(pairs):
+                    if pair == (first, second):
+                        parts[i:i + 2] = [first + second]
+                        break
+                else:
+                    continue
+                break
+            else:
+                break
+                
+        return b''.join(parts)
+
+    def encode(self, text: str) -> List[int]:
+        """Encode text into a sequence of token IDs."""
+        # Convert input text to bytes
+        byte_sequence = text.encode()
+        
+        # Apply BPE merges
+        merged = self._apply_merges(byte_sequence)
+        
+        # Convert merged sequence to token IDs
+        tokens = []
+        i = 0
+        while i < len(merged):
+            # Try to match longest possible token
+            found = False
+            for j in range(len(merged), i, -1):
+                substr = merged[i:j]
+                if substr in self.reverse_vocab:
+                    tokens.append(self.reverse_vocab[substr])
+                    i = j
+                    found = True
+                    break
+            
+            if not found:
+                # If no token found, treat single byte as unknown token
+                tokens.append(self.reverse_vocab.get(merged[i:i+1], 0))  # Use 0 as unknown token ID
+                i += 1
+                
+        return tokens
+
+    def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        """Lazily encode an iterable of strings into token IDs."""
+        for text in iterable:
+            yield from self.encode(text)
+
+    def decode(self, ids: List[int]) -> str:
+        """Decode a sequence of token IDs back into text."""
+        # Convert IDs to bytes and concatenate
+        byte_sequence = b''.join(self.vocab.get(id, b'') for id in ids)
+        
+        # Decode bytes to string, replacing invalid sequences with replacement character
+        return byte_sequence.decode(errors='replace')
+
 def get_tokenizer(
     vocab: dict[int, bytes],
     merges: list[tuple[bytes, bytes]],
@@ -1009,7 +1112,8 @@ def get_tokenizer(
     Returns:
         A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
-    raise NotImplementedError
+    return BPETokenizer(vocab, merges, special_tokens)
+    
 
 import os
 from collections import defaultdict, Counter
