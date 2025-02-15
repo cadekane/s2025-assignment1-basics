@@ -1154,12 +1154,12 @@ def run_train_bpe(
 
     # Step 1: Initialize frequency counters
     word_freqs = defaultdict(int)
-    pattern = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
     # Step 2: Process corpus in chunks
     with open(input_path, "r", encoding="utf-8") as f:
         while chunk := f.read(chunk_size):
-            words = pattern.findall(chunk)  # Tokenize words
+            words = re.findall(pattern, chunk)  # Tokenize words
             for word in words:
                 word_bytes = tuple(word.encode("utf-8"))
                 word_freqs[word_bytes] += 1
