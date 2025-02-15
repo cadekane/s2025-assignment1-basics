@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from pathlib import Path
 from transformers import GPT2Tokenizer
-from ece496b_basics.tests.adapters import run_transformer_lm, run_get_batch, save_checkpoint, load_checkpoint
+from s2025.tests.adapters import run_transformer_lm, run_get_batch, save_checkpoint, load_checkpoint
 
 # Initialize wandb
 wandb.init(project="transformer-lm-training")
