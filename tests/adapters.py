@@ -1046,19 +1046,19 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
     # Read the corpus
-    with open(input_path, "r", encoding="utf-8") as f:
-        corpus = f.read()
+    # with open(input_path, "r", encoding="utf-8") as f:
+    #     corpus = f.read()
 
     # Step 1: Pre-tokenize words using a regex pattern
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    words = re.findall(PAT, corpus)
+    # words = re.findall(PAT, corpus)
 
     # Step 2: Convert words into byte sequences & count word frequencies
-    word_freqs = defaultdict(int)
-    for word in words:
-        word_bytes = tuple(word.encode("utf-8"))  # Store as tuple (immutable)
-        word_freqs[word_bytes] += 1
-    print(word_freqs)
+    # word_freqs = defaultdict(int)
+    # for word in words:
+    #     word_bytes = tuple(word.encode("utf-8"))  # Store as tuple (immutable)
+    #     word_freqs[word_bytes] += 1
+    # print(word_freqs)
 
     # Step 3: Initialize vocabulary with raw bytes (0-255)
     vocab = {i: bytes([i]) for i in range(256)}
@@ -1068,6 +1068,16 @@ def run_train_bpe(
     for token in special_tokens:
         vocab[next_index] = token.encode("utf-8")
         next_index += 1
+    
+    # Replace the corpus reading and word finding section with streaming:
+    word_freqs = defaultdict(int)
+    with open(input_path, "r", encoding="utf-8") as f:
+        # Process file line by line instead of loading it all at once
+        for line in f:
+            words = re.findall(PAT, line)
+            for word in words:
+                word_bytes = tuple(word.encode("utf-8"))
+                word_freqs[word_bytes] += 1
 
     # Step 5: Prepare to track byte pair merges
     merges = []
