@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from pathlib import Path
 from transformers import GPT2Tokenizer
-from adapters import run_transformer_lm, run_get_batch, save_checkpoint, load_checkpoint
+from adapters import run_transformer_lm, run_get_batch, run_save_checkpoint, run_load_checkpoint
 
 # Initialize wandb
 wandb.init(project="transformer-lm-training")
@@ -41,7 +41,7 @@ def train(args):
     # Load checkpoint if resuming
     start_iter = 0
     if args.resume_from:
-        start_iter = load_checkpoint(args.resume_from, weights, optimizer)
+        start_iter = run_load_checkpoint(args.resume_from, weights, optimizer)
     
     # Main Training Loop
     for iteration in range(start_iter, args.num_iterations):
@@ -84,7 +84,7 @@ def train(args):
         
         # Save checkpoint periodically
         if iteration % args.checkpoint_interval == 0:
-            save_checkpoint(weights, optimizer, iteration, args.checkpoint_path)
+            run_save_checkpoint(weights, optimizer, iteration, args.checkpoint_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
